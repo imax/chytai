@@ -1026,6 +1026,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   no AI), which adds a found one (source `shelf`, 60 a reader / 200 a day, meta `shelfbooks:<day>`; Max hears of other
   readers' new books) and answers page and cover; not found = `q` on the book, asked again in a month (`RETRY_MS`).
   Status: `curl -s https://app.chytai.org.ua/agent/shelf-fill -H "$H"` (counts per account).
+  A book's card on any shelf (own or a friend's) has «Хочу прочитати» (Max 2026-11-28: the `#mn-want` slot
+  `Mentions.want` fills, as in a topic's card).
   The pencil's sheet has the shelf's own words under the name (`about`, 1,000 characters; Max 2026-11-28, «чи даю я
   книжки»), shown under the shelf's line to the owner and to followers (Russian paragraphs left out, `shelfAbout`);
   a reader's new words mail + Telegram Max.

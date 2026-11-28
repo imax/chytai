@@ -387,7 +387,9 @@
     }
   }
 
-  // A book's card: on one's own shelf «Прибрати з полиці»; on a friend's whose shelf it is, to ask them for it.
+  // A book's card: on one's own shelf «Прибрати з полиці»; on a friend's whose shelf it is, to ask them for it. Both
+  // have «Хочу прочитати» (Max 2026-11-28: unread books at his office too), the slot mentions.js fills as on a
+  // mentioned book's card («✓ У «Хочу прочитати»» once there; a book the catalog lacks is looked for first).
   function bookCard(i) {
     const b = cur?.books?.[i];
     if (!b) return;
@@ -395,7 +397,9 @@
     const top = mine ? "" : `<div class="r-want-where"><div><span class="r-want-k">Полиця</span><span>${esc(label(cur))}<span class="r-want-m"><br>Напишіть, щоб позичити</span></span></div></div>`;
     const page = b.h ? `<p class="pf-page"><a href="${esc(b.h)}" target="_blank" rel="noopener" data-act="shelf-page">Сторінка книжки на Chytai ↗</a></p>` : "";
     const drop = mine ? `<p class="mn-dropp"><button type="button" class="r-link mn-drop" data-sh-drop="${i}" data-act="shelf-drop">Прибрати з полиці</button></p>` : "";
-    window.Paper.card({ title: b.t, author: b.a, cover: b.c || "", href: b.h || "" }, { top, noAdd: true, foot: page + drop });
+    const book = { title: b.t, author: b.a, cover: b.c || "", href: b.h || "" };
+    window.Paper.card(book, { top, noAdd: true, foot: `<div id="mn-want"></div>${page}${drop}` });
+    window.Mentions?.want(book);
   }
   async function drop(btn) {
     const i = Number(btn.dataset.shDrop);
