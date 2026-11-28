@@ -62,7 +62,11 @@
     dialog.addEventListener("touchstart", (e) => {
       on = drag = false;
       if (!phone.matches || e.touches.length > 1 || dialog.scrollTop > 0 || dialog.classList.contains("closing")) return;
-      if (dialog.getBoundingClientRect().bottom < innerHeight - 4) return; // not a sheet
+      const box = dialog.getBoundingClientRect();
+      if (box.bottom < innerHeight - 4) return; // not a sheet
+      // The whole screen (the photo one circles a passage on) is no sheet either: a stroke down moved it (Max
+      // 2026-11-27, bot №88).
+      if (box.top < 4) return;
       if (e.target.closest?.("input, textarea, select, [contenteditable]") || sideways(e.target)) return;
       const t = e.touches[0];
       x0 = t.clientX; y0 = yl = t.clientY; tl = performance.now(); v = dy = 0; on = true;
