@@ -647,7 +647,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - A wrong or needless meaning Max reports in a free-shelf book (bug reports): `free/glossary-fixes.json`, per book
   `drop` (a dictionary word with all its forms, or one form) and `set` (form → [meaning, level, word]; give every
   form of the word the same meaning), laid over the kept list by `/api/glossary` (`glossFixed`); the file on the
-  volume stays as made. Forms of one word often carry different wordings (334 of 364 in «Чорна рада»).
+  volume stays as made. A first list (no levels) takes only `drop`. Forms of one word often carry different wordings (334 of 364 in «Чорна рада»).
 - Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.
@@ -858,6 +858,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   Ukrainian book typed with a Latin look-alike («прозрiнь», «кóпнувши») or an NFD «й» get them too (`plainWord`, Max
   2026-11-24, bot №46: Android's hyphenation gives up on them), only in a chapter with no soft hyphen of its own,
   which then carries `data-shy-odd` on <html> for `shyAt`.
+  A chapter whose text is Ukrainian in a book that says `ru` (or else) is marked `lang="uk"` (`ukLang`, bot №76/80:
+  Android hyphenated it by Russian rules and never broke a word with і/ї/є); then «Переклад» is hidden too (`bookUk`).
+- Reader dark theme: a book's own text and box colours give way (`themeCss`, `body *{color:inherit!important}`, bot
+  №73); the app's status bar follows the reader's theme (page → shell message `theme`, App.js `barStyle`, bot №77).
+- Reader «Читаю зараз» on the site: after 5 minutes of reading a book today (`readBooks`), not on opening it (bot №72).
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
@@ -981,11 +986,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   the book page's lookups). The page asks again every 30 s while books are unchecked. `library_cache` rows older than
   60 days go once a day (`sweep`). Card: «Бібліотека» first in «Де взяти».
   «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): above «Купити або взяти напрокат», empty
-  until the reader picks up to 3 shops (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
+  until the reader picks up to 5 shops (3 until bot №85) (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
   publisher, each with «N з вашого списку»; settings `shops`, names). `/api/reader-want` gives every book and every
   `other` version `stock` = {shop name: [price, url, format]} for each shop row in stock now (withShops: Megogo, Сенс,
   Book.ua, Абук, publishers' own shops), and `shops` = {name: {kind, formats}}; the page picks the reader's itself
-  (no extra call). Tile = the lowest price in a picked shop (+ its name when 2–3 picked); the card puts those shops
+  (no extra call). Tile = the lowest price in a picked shop (+ its name when 2+ picked); the card puts those shops
   first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the

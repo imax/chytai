@@ -163,7 +163,10 @@
   }
   $("#paper-found").addEventListener("click", (e) => {
     const d = $("#paper-found");
-    if (e.target === d) return d.close();
+    // A tap on the backdrop closes it in motion.js, which wants the touch to start there: Android's click after a
+    // tap on an underlined title in the book landed on the backdrop of the card that tap opened, and shut it at
+    // once (Max 2026-11-27, bot №78).
+    if (e.target === d) return;
     if (!d.found) return;
     const { seen, top } = d.found;
     const fold = e.target.closest("[data-pf-about]");
@@ -351,7 +354,7 @@
   }
   $("#paper-page").addEventListener("click", (e) => {
     const d = $("#paper-page");
-    if (e.target === d) return d.close();
+    if (e.target === d) return; // backdrop: motion.js
     if (e.target.closest("[data-pg-photo]")) return d.close(), pagePhoto();
   });
   document.addEventListener("submit", (e) => {

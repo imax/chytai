@@ -508,7 +508,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inG
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
     ${bookQuote && !ru ? `<section class="block" data-block="quote">${label("Цитата")}<figure class="book-quote"><blockquote>«${esc(nest(bookQuote.text))}»</blockquote>${bookQuote.page ? `<figcaption>стор. ${bookQuote.page}</figcaption>` : ""}</figure></section>` : ""}
-    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
+    ${/* No block when the club has no topic about the book (Max 2026-11-27, bot №90). */ ru || !club.length ? "" : `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
@@ -4145,11 +4145,17 @@ ${form}
 // «краще як для AI overview … змінюється просто підпис», not the books one by one).
 const ASK_STEPS = ["Читаю, що вам сподобалось…", "Згадую схожі книжки…", "Шукаю їх у каталозі…", "Відбираю ті, що пасують найбільше…", "Пишу, чому кожна…", "Ще трохи…"];
 const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
-function askForm(text = "", error = "") {
-  // No placeholder at all (Max 2026-11-26, bot №69: another reader's question showed there, once in Russian).
+const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
+// A question fit to be the example: Ukrainian letters, nothing Russian (Max 2026-11-27, bot №71: the example stays as
+// it was, only never in Russian).
+const askUkrainian = (t) => /[іїєґ]/i.test(t) && !/[ыэъё]/i.test(t) && require("./store").publicNote(t) === t;
+function askForm(text = "", error = "", latest = "") {
+  // One of the 10 newest Ukrainian questions, at random, as the example (Max, 2026-11-12: «рандомно одне з 10 останніх»).
+  const t = String(latest || "").replace(/\s+/g, " ").trim();
+  const hint = t ? `Наприклад: ${t.length > 300 ? `${t.slice(0, 297).replace(/\s+\S*$/, "")}…` : t}` : ASK_HINT;
   return `<form method="post" action="/ask" class="form ask-form" id="ask-form">
   ${error ? `<p class="error">${esc(error)}</p>` : ""}
-  <textarea name="text" rows="6" minlength="15" maxlength="1500" required aria-label="Що вам сподобалось">${esc(text)}</textarea>
+  <textarea name="text" rows="6" minlength="15" maxlength="1500" required placeholder="${attr(hint)}" aria-label="Що вам сподобалось">${esc(text)}</textarea>
   <div class="actions"><button class="btn primary">Порадити</button><span class="hint">Питання й відповідь побачать інші.</span></div>
 </form>
 <script>document.getElementById("ask-form").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
@@ -4162,7 +4168,7 @@ function askPage({ user, text = "", error = "", others = [] }) {
   <h1>Що почитати далі?</h1>
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
-${askForm(text, error)}
+${askForm(text, error, ((uk) => uk[Math.floor(Math.random() * uk.length)]?.text)(others.filter((o) => askUkrainian(String(o.text || ""))).slice(0, 10)))}
 ${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }

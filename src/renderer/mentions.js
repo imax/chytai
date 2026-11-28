@@ -123,8 +123,7 @@ window.Mentions = (() => {
       let top = `<p class="mn-from">${esc(from)}</p>`;
       // «Немає на Chytai» under «Про книжку», not above it (Max 2026-11-26, bot №66).
       const none = data && !cat && !b ? `<p class="r-want-none mn-none">Цієї книжки немає на Chytai.</p>` : "";
-      if (b) top += window.Want?.where(b) || "";
-      else if (!data) top += `<p class="r-want-none mn-wait">${SPIN}Шукаємо, де взяти…</p>`;
+      // No «Де взяти» here (Max 2026-11-27, bot №89: a mentioned book's card is not a shop; «Хочу прочитати» has it).
       const st = b?.status || "";
       const want = guest() || !data
         ? ""

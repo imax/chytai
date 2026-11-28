@@ -127,6 +127,8 @@ function Reader({ onInsets }) {
   const [progress, setProgress] = useState(1); // 0..1 while a page loads, 1 when done
   const [shellNote, setShellNote] = useState(null);
   const [inField, setInField] = useState(false); // Android: a text field has the focus (FIELD_REPORTER)
+  // The status bar's icons follow the reader's theme (the page's «theme» message), not the phone's (bot №77).
+  const [barStyle, setBarStyle] = useState('auto');
   // When iOS kills the page's process (memory), what the app was doing: told to the page after the reload, which
   // reports it with its own note (web-bridge.js life → /api/page-gone) and opens the book it had on screen.
   const activeAt = useRef(Date.now());
@@ -243,7 +245,7 @@ function Reader({ onInsets }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="auto" />
+      <StatusBar style={barStyle} />
       <WebView
         ref={webview}
         source={{ uri: READER_URL }}
@@ -295,6 +297,7 @@ function Reader({ onInsets }) {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
             if (msg.type === 'protect') setProtected(!!msg.on);
+            if (msg.type === 'theme') setBarStyle(msg.dark ? 'light' : 'dark');
             if (msg.type === 'speech') speech(msg.action);
             if (msg.type === 'insets') onInsets?.(msg.top, msg.bottom);
             if (msg.type === 'field') setInField(!!msg.on);

@@ -23,10 +23,16 @@ const resolvedTheme = () => {
 const themeCss = (name) =>
   Object.entries(THEMES_PHONE[name])
     .map(([sel, rules]) => `${sel}{${Object.entries(rules).map(([k, v]) => `${k}:${v}`).join(";")}}`)
-    .join("\n");
+    .join("\n") +
+  // In the dark theme a book's own text and box colours give way (Max 2026-11-27, bot №73: a book that sets
+  // «color: black» on its paragraphs was black on the dark page); links keep the theme's colour.
+  (name === "dark" ? `\nbody{color:${THEMES_PHONE.dark.body.color}!important}\nbody *{color:inherit!important;background-color:transparent!important}\nbody a,body a *{color:${THEMES_PHONE.dark.a.color}!important}` : "");
 
 function applyTheme() {
   document.body.dataset.theme = resolvedTheme();
+  // The app's status bar follows the reader's theme, not the phone's (Max 2026-11-27, bot №77: white icons over the
+  // light page on a phone in dark mode). Shells before this ignore the message.
+  try { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: "theme", dark: resolvedTheme() === "dark" })); } catch {}
   rendition?.getContents().forEach(styleContents);
 }
 const FONTS = {
@@ -270,6 +276,24 @@ function shyStressed(doc) {
   }
   // An attribute moves no place (a CFI counts elements and letters), and it goes with the chapter into the page.
   if (odd) doc.documentElement.setAttribute("data-shy-odd", "");
+}
+// A Ukrainian text in a book that calls itself Russian (or something else): the browser hyphenated it with that
+// language's rules and gave up on every word with і/ї/є (Max 2026-11-27, bot №76, №80: «безперспективність», «відмовився»
+// never broke), and «Переклад» showed for its words (№75). Such a chapter is marked Ukrainian; an attribute moves no
+// place. `bookUk` tells isUkrainian.
+let bookUk = false;
+function ukLang(doc) {
+  const root = doc?.documentElement;
+  const text = (doc?.body?.textContent || "").slice(0, 20000);
+  const uk = (text.match(/[іїєґ]/gi) || []).length;
+  if (uk < 5 || uk < 3 * (text.match(/[ыэъё]/gi) || []).length) return;
+  bookUk = true;
+  for (const el of [root, ...doc.querySelectorAll("[lang], [xml\\:lang]")]) {
+    for (const a of ["lang", "xml:lang"]) {
+      const v = el.getAttribute(a);
+      if (el === root ? !/^uk/i.test(v || "") : v && /^ru/i.test(v)) el.setAttribute(a, "uk");
+    }
+  }
 }
 // Positions in a text node of the soft hyphens shyStressed put in.
 function shyAt(node) {
@@ -552,6 +576,7 @@ async function openEpub(payload, { posKey, source }) {
   // contents entry, a saved position) was measured in the book's own styles and landed elsewhere
   // once line height and font changed.
   book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
+  book.spine.hooks.content.register(ukLang);
   book.spine.hooks.content.register(shyStressed);
   current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "", protected: !!payload.url, preview: !!payload.preview };
   bookShown = true;
@@ -831,6 +856,7 @@ function guideAhead() {
 document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && rendition && guideAhead());
 function closeBook() {
   if (rendition) guideAhead();
+  bookUk = false;
   window.Gloss?.load(null);
   window.Mentions?.load(null);
   $("#btn-search").classList.add("hidden");
@@ -1065,19 +1091,34 @@ $("#done-form").addEventListener("submit", async (e) => {
 // ---------- Footnotes: a way back after following a link inside the book ----------
 
 let returnCfi = null;
+// The button goes by itself after a while or a few pages read on from the jump (Max 2026-11-27, bot №81: it stayed
+// over the text).
+let returnTimer = null, returnTurns = 0;
+const BACK_SHOWN_MS = 30 * 1000;
 
 function rememberReturn() {
   // Still the page with the link: epub.js only starts moving after this event.
   const cfi = rendition?.currentLocation()?.start?.cfi;
   if (!cfi) return;
   returnCfi = cfi;
+  returnTurns = 0;
   $("#btn-back").classList.remove("hidden");
+  clearTimeout(returnTimer);
+  returnTimer = setTimeout(forgetReturn, BACK_SHOWN_MS);
+}
+function forgetReturn() {
+  clearTimeout(returnTimer);
+  returnCfi = null;
+  $("#btn-back").classList.add("hidden");
+}
+// Each «relocated» while it shows: the jump itself is the first, then pages turned.
+function returnTurned() {
+  if (returnCfi && ++returnTurns > 3) forgetReturn();
 }
 
 $("#btn-back").onclick = () => {
   if (returnCfi) rendition?.display(returnCfi);
-  returnCfi = null;
-  $("#btn-back").classList.add("hidden");
+  forgetReturn();
 };
 
 // ---------- Phone: full-height reading ----------
@@ -1338,6 +1379,7 @@ function chapterTitle(href, cfi) {
 function onRelocated(location) {
   // A late «relocated» from a book just closed (book is null by then; iPhone app 2026-11-23).
   if (!book || !location?.start) return;
+  returnTurned();
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
@@ -1550,7 +1592,7 @@ function handleSelection(range, cfiRange, ctx, frame) {
   };
   const bar = $("#sel-toolbar");
   bar.classList.remove("mark");
-  bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
+  bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text, ctx);
   const quote = pendingSelection.text.replace(/\s+/g, " ");
   bar.querySelector(".st-quote").textContent = quote.length > 300 ? quote.slice(0, 300) + "…" : quote;
   wordCard(pendingSelection);
@@ -1658,10 +1700,11 @@ if (window.visualViewport) {
   keyboardGap(); // the window's height before any keyboard
 }
 
-// No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
-function isUkrainian(text) {
+// No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ. A word without
+// them («вигнання») is judged with the text around it (Max 2026-11-27, bot №75).
+function isUkrainian(text, ctx) {
   const lang = String(book?.packaging?.metadata?.language || "").toLowerCase();
-  return lang.startsWith("uk") || /[іїєґ]/i.test(text);
+  return lang.startsWith("uk") || (bookUk && /[а-я]/i.test(text)) || /[іїєґ]/i.test(text) || (/[а-я]/i.test(text) && !/[ыэъё]/i.test(text) && /[іїєґ]/i.test(`${String(ctx?.before || "").slice(-400)} ${String(ctx?.after || "").slice(0, 400)}`));
 }
 
 function showSelToolbar(range, frame) {
@@ -2287,7 +2330,7 @@ function syncConvActs(conv) {
   const card = conv.card;
   const saved = notes.some((n) => n.cfi === conv.cfiRange);
   card.querySelector(".c-note").classList.toggle("hidden", !conv.context.selection || saved || !String(conv.cfiRange).startsWith("epubcfi"));
-  card.querySelector(".c-other").classList.toggle("hidden", !conv.context.selection || (conv.mode !== "translate" && isUkrainian(conv.context.selection)));
+  card.querySelector(".c-other").classList.toggle("hidden", !conv.context.selection || (conv.mode !== "translate" && isUkrainian(conv.context.selection, conv.context)));
   card.querySelector(".c-acts .where").classList.toggle("c-go", !(!conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition));
 }
 

@@ -1615,7 +1615,8 @@ button.nx-th { flex-direction: column; gap: 0; }
     background: var(--m-sheet); border: none; border-radius: 16px 16px 0 0; box-shadow: var(--m-shadow); font-family: var(--m-sans);
   }
   .m-sheet { top: var(--ms-top, 44%); animation: m-up .22s ease-out; }
-  #msheet[data-kind="look"] { top: auto; }
+  /* As tall as its rows, never past the status bar: its body scrolls (Max 2026-11-27, bot №91: ✕ under the clock). */
+  #msheet[data-kind="look"] { top: auto; max-height: calc(100dvh - env(safe-area-inset-top) - 12px); }
   .m-sheet.dragging { transition: none; animation: none; }
   @keyframes m-up { from { transform: translateY(40px); opacity: 0; } }
   #panel { top: var(--panel-top, 47%); border-top: none; transition: transform .24s ease-out, top .24s ease-out, visibility 0s; }
@@ -2276,13 +2277,14 @@ html body.offline #sel-toolbar:not(.mark) [data-action="translate"] { color: var
 
 /* «Запитання»: the field for a question about the book, then the questions, the open one in full on top, the
    others folded to the passage (or the question) and the start of the answer. */
+/* Room to write, like a paper book's question field (Max 2026-11-27, bot №79: «клаустрофобне»). */
 #ask-book {
-  display: flex; flex-direction: column; gap: 4px; margin: 14px 20px 6px; padding: 10px 12px 6px 14px; border: 1px solid var(--m-sline);
+  display: flex; flex-direction: column; gap: 10px; margin: 14px 20px 6px; padding: 14px 14px 10px; border: 1px solid var(--m-sline);
   border-radius: 14px; background: var(--m-card); font-family: var(--m-sans);
 }
 #ask-book:focus-within { border-color: var(--m-ochre); }
 #ab-q {
-  width: 100%; min-height: 28px; max-height: 30vh; field-sizing: content; resize: none; border: none; outline: none; padding: 4px 0;
+  width: 100%; min-height: 84px; max-height: 30vh; field-sizing: content; resize: none; border: none; outline: none; padding: 4px 0;
   background: transparent; color: var(--m-ink); font: 400 17px/1.35 var(--m-serif);
 }
 #ab-q::placeholder { color: var(--m-ink3); }
@@ -2427,9 +2429,10 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
   .r-mine .r-sec-head { position: relative; }
   .r-mine .r-view { position: absolute; right: 0; top: -6px; }
   .r-mine .r-sec-head:not(.plain) .r-view { top: 6px; }
-  .r-list .r-card { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 14px; padding: 9px 0; }
-  .r-list .r-st { grid-column: 3; }
-  .r-list .r-more { grid-column: 4; }
+  /* The % over ⋯ in one narrow column: more of the line for the title and author (Max 2026-11-27, bot №83). */
+  .r-list .r-card { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; padding: 9px 0; }
+  .r-list .r-st { grid-column: 3; grid-row: 1; justify-self: end; align-self: end; }
+  .r-list .r-more { grid-column: 3; grid-row: 2; justify-self: end; align-self: start; height: 22px; }
   .r-lhead, .r-list .r-lc { display: none; }
   .r-list .r-card .r-cover { width: 40px; }
   .r-list .r-more { width: 24px; }
@@ -2510,10 +2513,16 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 
 /* Narrow screens: a 320 px phone, or Android's bigger system font, which zooms the whole page (app/zoom.js, bug №24,
    2026-11-22: 411 px at ×1.5 is 274 px). */
+/* A narrow phone (or a big system font): the selection card's words fit, none cut (Max 2026-11-27, bot №74). */
+@media (max-width: 380px) {
+  html body #sel-toolbar:not(.mark) .st-row { gap: 0; }
+  html body #sel-toolbar:not(.mark) .st-row .st-link { padding: 9px 5px; font-size: 14px; }
+  html body #sel-toolbar:not(.mark) .st-row .pp-tool { width: 34px; }
+}
 @media (max-width: 340px) {
   .r-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .r-head .r-logo span { display: none; }
-  html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 16px; }
+  html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 14px; }
   dialog menu { flex-wrap: wrap; }
 }
 
@@ -2541,5 +2550,5 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .mn-on { margin: 16px 0 0; font-size: 15px; color: var(--r-ink2); }
 .mn-dropp { margin: 10px 0 0; font-size: 14px; }
 .mn-drop { color: var(--r-ink3); }
-.mn-none { color: var(--r-ink3); }
+.mn-none { color: var(--r-ink3); margin-bottom: 14px !important; } /* not against «Хочу прочитати» (bot №82) */
 .mn-lead { margin: -4px 0 14px; font-size: 15px; color: var(--r-ink2); }

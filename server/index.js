@@ -1953,7 +1953,7 @@ api.patch("/settings", (req, res) => {
     // «Бібліотеки» in «Хочу прочитати» (want.js): the branches the reader picked, 5 at most, { lib, branch }.
     else if (k === "libraries") u[k] = (Array.isArray(v) ? v : []).filter((x) => x && typeof x.lib === "string" && typeof x.branch === "string").slice(0, 5).map((x) => ({ lib: x.lib.slice(0, 30), branch: x.branch.slice(0, 200) }));
     // «Мої книгарні» in «Хочу прочитати» (want.js): the shops the reader picked by name, 3 at most.
-    else if (k === "shops") u[k] = [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 3);
+    else if (k === "shops") u[k] = [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 5); // five shops (bot №85)
     else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
   if (!req.guest || req.share) saveState();
@@ -2044,17 +2044,21 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   const kept = wantKept.get(req.acct);
   const same = kept && kept.picks === JSON.stringify(picks);
   const myShops = userState(req.acct).shops || [];
-  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: kept.books, libs: kept.libs, shops: kept.shops, picks, myShops });
+  // A book finished here leaves the list even while the site still has it as «Хочу прочитати» (Max 2026-11-27, bot
+  // №84: «Прочитано» in the reader marks the site only once its form is sent).
+  const done = userState(req.acct).finished || {};
+  const unread = (books) => (books || []).filter((b) => !(b?.mine && done[b.mine]));
+  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops });
   try {
     const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, libs: picks }), signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`site ${r.status}`);
     const { books, libs = null, shops = {} } = await r.json();
     if (wantKept.size > 500) wantKept.delete(wantKept.keys().next().value);
     wantKept.set(req.acct, { at: Date.now(), books, libs, shops, picks: JSON.stringify(picks) });
-    res.json({ books, libs, shops, picks, myShops });
+    res.json({ books: unread(books), libs, shops, picks, myShops });
   } catch (err) {
     console.error(`reader-want ${req.acct}:`, err.message);
-    if (kept && same) return res.json({ books: kept.books, libs: kept.libs, shops: kept.shops, picks, myShops });
+    if (kept && same) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops });
     res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
   }
 });
@@ -2418,7 +2422,9 @@ setTimeout(async () => {
 // «Читаю зараз» on the site follows the reader (Max, 2026-11-01: «Автоматом встановлювати Читаю зараз з
 // читалки»): a book read here for a few minutes goes to the site once a day; the site puts it on «Читаю зараз»
 // unless the account turned that off in its settings there or already has the book as «Прочитано».
-const NOW_AFTER = 3 * 60 * 1000;
+// Five minutes of reading it today (reading-time.js's active seconds, `readBooks`), not a book only opened (Max
+// 2026-11-27, bot №72); a paper book: five minutes of its page in use.
+const NOW_AFTER = 5 * 60 * 1000;
 // What the reader knows of a book without opening it: paper books, the free shelf, publishers' books.
 function bookInfo(acct, name) {
   const pb = paper.NAME.test(name) ? state.users[acct]?.paper?.[name] : null;
@@ -2436,6 +2442,7 @@ function noteReadingNow(acct, name) {
   readingSince.set(key, r);
   const day = statsDay(t);
   if (r.told === day || t - r.from < NOW_AFTER) return;
+  if (!paper.NAME.test(name) && (state.stats?.days?.[day]?.readBooks?.[acct]?.[name] || 0) * 1000 < NOW_AFTER) return;
   r.told = day;
   const info = bookInfo(acct, name);
   const book = { name, title: info.title, authors: info.authors };
@@ -2645,8 +2652,9 @@ function glossFixed(shelf, forms) {
   if (!fix) return forms;
   const drop = new Set(fix.drop || []);
   const out = {};
-  for (const [k, x] of Object.entries(forms)) if (!drop.has(k) && !drop.has(x[2])) out[k] = x;
-  return { ...out, ...fix.set };
+  for (const [k, x] of Object.entries(forms)) if (!drop.has(k) && !(Array.isArray(x) && drop.has(x[2]))) out[k] = x;
+  // The first lists ({ form: meaning }, no levels) take only `drop` (Max 2026-11-27, bot №92: «Я (Романтика)»).
+  return Object.values(forms).some((x) => typeof x === "string") ? out : { ...out, ...fix.set };
 }
 api.get("/glossary", (req, res) => {
   const name = safeBookName(req.query.book);
@@ -2664,7 +2672,7 @@ api.get("/glossary", (req, res) => {
   }
   const g = name && (isFree(name) ? glossary.get(name) : own?.same ? glossary.get(own.same) : own);
   if (!g && !names) return res.status(404).json({ error: "Словничка немає." });
-  res.set("Cache-Control", "private, no-cache").json({ forms: g?.forms || {}, names });
+  res.set("Cache-Control", "private, no-cache").json({ forms: glossFixed(isFree(name) ? name : own?.same, g?.forms || {}), names });
 });
 
 // One entry of a publisher's book: GET /api/pbook/<book>/<path inside the EPUB>.

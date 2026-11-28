@@ -25,7 +25,8 @@
   let failed = false;
   let picks = []; // the reader's library branches, [{ lib, branch }]
   let libs = null; // { unchecked } for the picks
-  let myShops = []; // the reader's shops by name, 3 at most
+  let myShops = []; // the reader's shops by name, SHOPS_MAX at most
+  const SHOPS_MAX = 5; // Max 2026-11-27, bot №85 (was 3)
   let shopKinds = {}; // name -> { kind: "shop" | "publisher", formats }
   let libBusy = false; // the picks changed, the answer for them not here yet
   let again = null; // the timer that asks again while the libraries are being checked
@@ -104,7 +105,7 @@
     const change = `<button type="button" class="r-link r-want-fold" data-act="want-shops">Змінити</button>`;
     if (!myShops.length)
       return `<div class="r-want-libs"><div class="r-sec-head"><h2>Мої книгарні</h2></div>
-        <p class="r-want-p">Оберіть до трьох книгарень, і тут будуть книжки, які в них є зараз.</p>
+        <p class="r-want-p">Оберіть до п'яти книгарень, і тут будуть книжки, які в них є зараз.</p>
         <p class="r-want-p"><button type="button" class="r-pill-line" data-act="want-shops">Обрати книгарню</button></p></div>`;
     const have = books.map((b, i) => [b, i]).filter(([b]) => !readNow(b) && inMine(b).length);
     const cap = (b) => ((t) => (Number.isFinite(t[1]) ? `${t[1]} ₴` : "є") + (myShops.length > 1 ? ` · ${t[0]}` : ""))(inMine(b)[0]);
@@ -204,7 +205,7 @@
     shopTab = myShops.length && Object.keys(shopKinds).length && myShops.every((n) => shopKinds[n]?.kind === "publisher") ? "publisher" : "shop";
     const d = dlg();
     d.querySelector("h2").textContent = "Мої книгарні";
-    d.querySelector("#lb-sub").textContent = "До трьох. Покажемо, які книжки з вашого списку там є зараз.";
+    d.querySelector("#lb-sub").textContent = "До п'яти. Покажемо, які книжки з вашого списку там є зараз.";
     shopsHtml(true);
     d.showModal();
   }
@@ -218,7 +219,7 @@
     const list = names.filter((x) => kind(x) === shopTab);
     if (sort) shopOrder = [...list].sort((x, y) => shopsChosen.includes(y) - shopsChosen.includes(x) || n(y) - n(x) || x.localeCompare(y, "uk"));
     list.sort((x, y) => shopOrder.indexOf(x) - shopOrder.indexOf(y));
-    const full = shopsChosen.length >= 3;
+    const full = shopsChosen.length >= SHOPS_MAX;
     const tabsHtml = tabs.length > 1 ? `<div class="r-tabs">${tabs.map((t) => {
       const c = shopsChosen.filter((x) => kind(x) === t).length;
       return `<button type="button" class="${t === shopTab ? "on" : ""}" data-act="want-shop-tab" data-stab="${t}">${t === "shop" ? "Книгарні" : "Видавництва"}${c ? ` <i>${c}</i>` : ""}</button>`;
@@ -231,7 +232,7 @@
         return `<li><label class="${full && !on ? "off" : ""}" data-act="want-shop-pick"><input type="checkbox" data-shop="${esc(x)}"${on ? " checked" : ""}${full && !on ? " disabled" : ""} />${esc(x)}${fmt(x)}<small>${k ? `${k} з вашого списку` : "зараз нічого"}</small></label></li>`;
       }).join("")
       : `<li class="lb-note">Поки жодна з цих книгарень не має книжок з вашого списку.</li>`;
-    const note = shopsChosen.length ? `Обрано ${shopsChosen.length} з 3.` : "Yakaboo, «Є» й Readeat поки не кажуть, що в них є.";
+    const note = shopsChosen.length ? `Обрано ${shopsChosen.length} з ${SHOPS_MAX}.` : "Yakaboo, «Є» й Readeat поки не кажуть, що в них є.";
     dlg().querySelector("#lb-body").innerHTML = `${tabsHtml}<ul class="lb-list">${rows}</ul><p class="lb-note lb-n">${note}</p>`;
   }
 
@@ -311,7 +312,7 @@
     const sb = e.target.closest("[data-shop]");
     if (sb) {
       const name = sb.dataset.shop;
-      shopsChosen = shopsChosen.includes(name) ? shopsChosen.filter((x) => x !== name) : [...shopsChosen, name].slice(0, 3);
+      shopsChosen = shopsChosen.includes(name) ? shopsChosen.filter((x) => x !== name) : [...shopsChosen, name].slice(0, SHOPS_MAX);
       return shopsHtml(false);
     }
     const box = e.target.closest("[data-branch]");
