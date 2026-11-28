@@ -6,8 +6,8 @@
 // - The text: a chapter's titles from the server (Haiku, once a file for every reader), the first place of each in the
 //   chapter underlined with a solid line (a CSS Custom Highlight, as «Словничок»: the book's DOM is not touched).
 //   «Аа» → «Згадані книжки» → «Ні» takes the lines away (`mentions`, per device); the titles are still kept.
-// - A tap on either: the book's card (paper.js Paper.card): where it was met, where to get it (want.js Want.where),
-//   «Про книжку», «Хочу прочитати» (the site's shelf), the page on Chytai, «Прибрати зі згаданих».
+// - A tap on either: the book's card (paper.js Paper.card): where it was met, «Про книжку», «Додати в тему» (a «Нотатки»
+//   topic, below), «Хочу прочитати» (the site's shelf), the page on Chytai, «Прибрати зі згаданих».
 // The list itself is in «Нотатки» (scratch.js): «Згадані книжки» and a book's «Книжки» tab.
 window.Mentions = (() => {
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
@@ -113,10 +113,127 @@ window.Mentions = (() => {
     return t ? `«${t}»` : "книжці";
   }
 
+  // ---------- «Додати в тему» ----------
+  // Max 2026-11-28, variant A of canvas 4NY9k5VDz5rgvscFk2sGwV (bot №87): a row under «Про книжку», as «Тема:» on a
+  // book's page in «Нотатки». A tap unfolds the reader's topics in the card (the last five, a search, «+ Нова тема» with
+  // the words typed); then «Тема: … × + ще». The book goes into the topic as one added by hand (server/scratch.js
+  // `mention`), so the topic lists it with the book it was met in, and Opus hears of it.
+  const LENS = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>`;
+  const fold = (x) => String(x || "").toLowerCase().replace(/ґ/g, "г").replace(/[ʼ’']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const plural = (n, a, b, c) => (n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c);
+  // The card's topics: { list (null while asked), pick (unfolded), q (the search), busy }.
+  let tp = { list: null, pick: false, q: "", busy: false };
+  const card = () => document.querySelector("#paper-found");
+  // The book as the topic keeps it: the catalog's when known, and the book it was met in.
+  function topicBook() {
+    const d = card();
+    const m = d.mention || {};
+    const cat = d.mentionCat;
+    return { title: cat?.title || m.title, author: cat?.author || m.author || "", href: cat?.href || "", cover: cat?.cover || "", year: cat?.year || null, from: (String(d.mentionFrom || "").match(/«([^»]+)»/) || [])[1] || "" };
+  }
+  const inTopic = (t, b) => t.books.some((x) => (b.href && x.href === b.href) || fold(x.t) === fold(b.title));
+  function topicHtml() {
+    if (guest()) return "";
+    const b = topicBook();
+    const ins = (tp.list || []).filter((t) => inTopic(t, b));
+    let html = ins.length
+      ? `<div class="mn-tchips"><span class="mn-tl">${ins.length > 1 ? "Теми" : "Тема"}:</span>${ins.map((t) => `<span class="nx-tchip"><span class="mn-tname">${esc(t.title)}</span><button type="button" class="nx-tx" data-mn-tout="${esc(t.id)}" data-act="mention-topic-out" aria-label="Прибрати з теми">×</button></span>`).join("")}${tp.pick ? "" : `<button type="button" class="r-link mn-tmore" data-mn-tpick data-act="mention-topic">+ ще</button>`}</div>`
+      : `<section class="ab-block mn-tp"><button type="button" class="pp-row" data-mn-tpick data-act="mention-topic"><span>Додати в тему</span><span class="mn-plus" aria-hidden="true">+</span></button></section>`;
+    if (tp.pick) html += `<div class="mn-pick"><label class="nx-search">${LENS}<input id="mn-pick" type="search" placeholder="Знайти тему або назвати нову" value="${esc(tp.q)}" autocomplete="off" enterkeyhint="done"></label><div id="mn-picks">${picksHtml()}</div></div>`;
+    return html;
+  }
+  function picks() {
+    const b = topicBook();
+    const q = fold(tp.q);
+    const free = (tp.list || []).filter((t) => !inTopic(t, b));
+    return q ? free.filter((t) => fold(t.title).includes(q)).slice(0, 8) : free.slice(0, 5);
+  }
+  function picksHtml() {
+    if (!tp.list) return `<p class="pf-wait">${SPIN}Завантажую теми…</p>`;
+    const n = (t) => (t.n ? `${t.n} ${plural(t.n, "книжка", "книжки", "книжок")}` : "ще без книжок");
+    const q = tp.q.trim();
+    return picks().map((t) => `<button type="button" class="mn-trow" data-mn-tin="${esc(t.id)}" data-act="mention-topic-in"><span>${esc(t.title)}</span><small>${n(t)}</small></button>`).join("") +
+      `<button type="button" class="mn-trow mn-tnew" data-mn-tnew data-act="mention-topic-new">${tp.busy ? SPIN : ""}+ Нова тема${q ? ` «${esc(q)}»` : ""}</button>`;
+  }
+  const topicBox = () => document.querySelector("#mn-topic");
+  function drawTopic(focus = false) {
+    const box = topicBox();
+    if (!box) return;
+    box.innerHTML = topicHtml();
+    // A computer gets the field ready; a phone only once tapped (the keyboard would hide the card).
+    if (focus && matchMedia("(hover: hover)").matches) document.querySelector("#mn-pick")?.focus();
+  }
+  async function loadTopics(m) {
+    try {
+      const { topics } = await window.reader.scratchTopics();
+      if (card().mention === m) (tp.list = topics || []), drawTopic();
+    } catch {
+      if (card().mention === m) (tp.list = []), drawTopic();
+    }
+  }
+  const oops = (err) => window.showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message || "Не вийшло.", false);
+  const changed = () => document.dispatchEvent(new CustomEvent("mentions-changed")); // «Нотатки» on screen asks again
+  async function intoTopic(id) {
+    const t = tp.list?.find((x) => x.id === id);
+    if (!t || tp.busy) return;
+    const b = topicBook();
+    tp.busy = true;
+    try {
+      await window.reader.scratchPatch(id, { mention: b, on: true });
+      t.books.push({ t: b.title, a: b.author, href: b.href });
+      t.n++;
+      tp.pick = false;
+      tp.q = "";
+      changed();
+    } catch (err) {
+      oops(err);
+    }
+    tp.busy = false;
+    drawTopic();
+  }
+  async function outOfTopic(id) {
+    const t = tp.list?.find((x) => x.id === id);
+    if (!t) return;
+    const b = topicBook();
+    try {
+      await window.reader.scratchPatch(id, { mention: b, on: false });
+      t.books = t.books.filter((x) => !((b.href && x.href === b.href) || fold(x.t) === fold(b.title)));
+      t.n = Math.max(0, t.n - 1);
+      changed();
+    } catch (err) {
+      oops(err);
+    }
+    drawTopic();
+  }
+  // A new topic named by the words typed, with this book in it; Opus answers it in «Нотатки» as any new topic.
+  async function newTopic() {
+    const text = tp.q.trim();
+    if (!text) return document.querySelector("#mn-pick")?.focus();
+    if (tp.busy) return;
+    const b = topicBook();
+    tp.busy = true;
+    drawTopic();
+    try {
+      const lib = (window.Shell.books?.() || []).slice(0, 300).map((x) => ({ p: x.path, t: x.title, a: (x.authors || [x.author])[0] || "" }));
+      const { item } = await window.reader.scratchAdd({ text, mention: b, lib });
+      tp.list = [{ id: item.id, title: text, n: 1, books: [{ t: b.title, a: b.author, href: b.href }] }, ...(tp.list || [])];
+      tp.pick = false;
+      tp.q = "";
+      changed();
+    } catch (err) {
+      oops(err);
+    }
+    tp.busy = false;
+    drawTopic();
+  }
+
   // ---------- the card ----------
   // m: { title, author, orig, cat? (the catalog's book, when known), id + src (the list's entry and its book) }.
   async function open(m, from) {
     const d = document.querySelector("#paper-found");
+    tp = { list: null, pick: false, q: "", busy: false };
+    d.mentionFrom = from;
+    d.mentionCat = m.cat || null;
     const draw = (data) => {
       const cat = data ? data.cat : m.cat;
       const b = data?.book || null;
@@ -136,10 +253,13 @@ window.Mentions = (() => {
             : `<button type="button" class="r-pill pf-add" data-mn-want="${esc(cat.href)}" data-act="mention-want">Хочу прочитати</button>`;
       const page = cat?.href ? `<p class="pf-page"><a href="${esc(cat.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : "";
       const drop = m.id && m.src ? `<p class="mn-dropp"><button type="button" class="r-link mn-drop" data-mn-drop data-act="mention-drop">Прибрати зі згаданих</button></p>` : "";
-      window.Paper.card({ title: cat?.title || m.title, author: cat?.author || m.author, cover: cat?.cover || "", href: cat?.href || "", year: cat?.year || null }, { top, noAdd: true, foot: none + want + page + drop });
       d.mention = m;
+      d.mentionCat = cat || null;
+      const topic = guest() ? "" : `<div id="mn-topic">${topicHtml()}</div>`;
+      window.Paper.card({ title: cat?.title || m.title, author: cat?.author || m.author, cover: cat?.cover || "", href: cat?.href || "", year: cat?.year || null }, { top, noAdd: true, foot: topic + none + want + page + drop });
     };
     draw(null);
+    if (!guest()) loadTopics(m);
     window.ReadingTime?.count("mention-card");
     let data = { cat: m.cat ?? null, book: null };
     try {
@@ -149,6 +269,12 @@ window.Mentions = (() => {
   }
   document.querySelector("#paper-found").addEventListener("click", async (e) => {
     const d = e.currentTarget;
+    if (e.target.closest("[data-mn-tpick]")) return (tp.pick = !tp.pick), drawTopic(tp.pick);
+    const tin = e.target.closest("[data-mn-tin]");
+    if (tin) return intoTopic(tin.dataset.mnTin);
+    const tout = e.target.closest("[data-mn-tout]");
+    if (tout) return outOfTopic(tout.dataset.mnTout);
+    if (e.target.closest("[data-mn-tnew]")) return newTopic();
     const w = e.target.closest("[data-mn-want]");
     if (w) {
       w.disabled = true;
@@ -186,6 +312,20 @@ window.Mentions = (() => {
       d.close();
       document.dispatchEvent(new CustomEvent("mentions-changed"));
     }
+  });
+  document.querySelector("#paper-found").addEventListener("input", (e) => {
+    if (e.target.id !== "mn-pick") return;
+    tp.q = e.target.value;
+    const box = document.querySelector("#mn-picks");
+    if (box) box.innerHTML = picksHtml();
+  });
+  // Enter: the one topic found, else a new topic of the words typed.
+  document.querySelector("#paper-found").addEventListener("keydown", (e) => {
+    if (e.target.id !== "mn-pick" || e.key !== "Enter") return;
+    e.preventDefault();
+    const p = tp.q.trim() ? picks() : [];
+    if (p.length === 1) intoTopic(p[0].id);
+    else if (tp.q.trim()) newTopic();
   });
   document.querySelector("#paper-found").addEventListener("close", (e) => {
     e.currentTarget.mention = null; // a late answer for a closed card draws nothing over the next one

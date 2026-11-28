@@ -301,14 +301,16 @@
     }, 250);
   }
 
+  // A book put in from a mentioned book's card (mentions.js) has no why of Opus's: the book it was met in instead.
+  const whyOf = (b) => b.why || (b.mention ? (typeof b.mention === "string" ? `Згадано в «${b.mention}»` : "Згадана книжка") : "");
   function aiBookHtml(b, i, it, button) {
-    const lang = b.title_uk ? "є українською" : LANG[b.lang] || "";
+    const lang = b.mention ? "" : b.title_uk ? "є українською" : LANG[b.lang] || "";
     // A suggestion is short (Max 2026-11-26, variant A, bot №55): no «нонфікшн», the why in two lines, the two
     // actions as words on one line.
     const meta = [bookAuthor(b), lang, b.nonfiction && !button ? "нонфікшн" : ""].filter(Boolean).join(" · ");
     return `<div class="r-scr-book">
       <button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button>
-      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why${button ? " nx-clamp" : ""}">${esc(b.why)}</span>` : ""}</button>
+      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${whyOf(b) ? `<span class="r-scr-why${button ? " nx-clamp" : ""}">${esc(whyOf(b))}</span>` : ""}</button>
       ${button ? `<span class="nx-sacts"><button type="button" class="r-link nx-sadd" data-act="scr-add" data-scr-ai="${i}">+ Додати в тему</button><button type="button" class="r-link nx-no" data-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
   }
 
@@ -634,7 +636,7 @@
       const acts = b.wanted
         ? `<button type="button" class="r-link nx-drop" data-nx-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`
         : `<span class="nx-acts3"><button type="button" class="r-pill" data-nx-act="scr-add" data-scr-ai="${i}">Додати в тему</button><button type="button" class="r-link nx-no" data-nx-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>`;
-      return topicCard({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year }, b.why ? `<p class="nx-cwhy">${esc(b.why)}</p>` : "", acts);
+      return topicCard({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year }, whyOf(b) ? `<p class="nx-cwhy">${esc(whyOf(b))}</p>` : "", acts);
     }
     try {
       if (name === "scr-link") {

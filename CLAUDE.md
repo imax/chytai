@@ -953,7 +953,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   asked again after 30 days). A reader's list = items kind `mentions` per book (`{id, title, author, chats, text, gone}`,
   not in `tally`); `GET /api/mentions[?book]`, the card `GET /api/mentions/card` («Де взяти» from the site's
   `/api/reader-want` with `hrefs`), «Хочу прочитати» `POST /api/mentions/want` (site `/api/reader-wantit`),
-  «Прибрати зі згаданих» `DELETE /api/mentions?book&id`. «Нотатки»: the section «Згадані книжки» before «З книжок»,
+  «Прибрати зі згаданих» `DELETE /api/mentions?book&id`. «Додати в тему» on the card (Max 2026-11-28, variant A of canvas
+  4NY9k5VDz5rgvscFk2sGwV, bot №87; no «Де взяти» there, №89): a row under «Про книжку», the topics unfold in the card
+  (`GET /api/scratch/topics`: names, counts, hand-added books; the last five, a search, «+ Нова тема» = `POST /api/scratch`
+  with `mention`), then «Тема: … × + ще». The book goes in as a hand-added book (`PATCH /api/scratch/:id {mention, on}`,
+  scratch.js `mention`: an `ai.books` entry with `wanted` and `mention` = the book it was met in, shown «Згадано в «…»»;
+  out again = spliced); `run` merges the entry as it is when Opus answers, so a book added meanwhile stays. «Нотатки»: the section «Згадані книжки» before «З книжок»,
   «Усі» by source book, a book's tab «Книжки». Caps $3 a day, $0.5 a reader, Max none; stats day `mentions`. Old
   explanations: `POST /agent/mentions {"run":true}` (`acct` for one), status `GET /agent/mentions` (done once 2026-11-26).
 - Reader «Хочу прочитати» (Max 2026-11-24, in Scratchpad's place; panel after «Мої книжки», `r-pnav-want`, page `want`,
@@ -1000,7 +1005,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
-  reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with
+  reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone), and only when the reader
+  has been on 60%+ of it (`coverage`: `u.progress[book].cov`, 50 slots of 2%, filled by `/api/position`; a jump by the
+  contents to the last part and its end is not «read», Max 2026-11-28, Хвильовий's three works in one book) and asks the site with
   `peek` (`/api/reader-read`: href, title, author, status, rating, note; nothing changes). When the catalog has the book,
   a small card like «Перед главою» (`#done-card`); a tap on it or a turn past the last page (`doneNext`, wrapped into
   `rendition.next`) opens a whole screen (`#done`: cover, the site's stars, a few words). The home menu's «Позначити

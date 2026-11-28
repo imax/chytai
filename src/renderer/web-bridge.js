@@ -901,6 +901,7 @@
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
     // «Нотатки» (scratch.js, server/scratch.js): topics with thoughts and books; an error's words come as the Error's.
     scratchList: async () => (await api("GET", "/api/scratch")).json(),
+    scratchTopics: async () => ok(api("GET", "/api/scratch/topics")),
     scratchAdd: (entry) => ok(api("POST", "/api/scratch", entry)),
     scratchAsk: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body)),
     scratchThink: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/thought`, body)),
