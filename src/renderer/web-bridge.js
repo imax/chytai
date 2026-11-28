@@ -996,7 +996,7 @@
     // card (the catalog's book, where to get it), «Хочу прочитати» on the site, «Прибрати зі згаданих».
     mentions: (book) => ok(api("GET", `/api/mentions${book ? `?book=${encodeURIComponent(book)}` : ""}`)),
     mentionsText: (book, href, c) => ok(api("GET", `/api/mentions/text?${new URLSearchParams({ book, href, c: c || "" })}`)),
-    mentionCard: (m) => ok(api("GET", `/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "" })}`)),
+    mentionCard: (m) => ok(api("GET", `/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "", ...(m.href ? { href: m.href } : {}) })}`)),
     mentionWant: (href, off = false) => ok(api("POST", "/api/mentions/want", { href, off })),
     mentionWantNew: (title, author) => ok(api("POST", "/api/mentions/wantnew", { title, author })),
     mentionDrop: (book, id) => ok(api("DELETE", `/api/mentions?${new URLSearchParams({ book, id })}`)),
