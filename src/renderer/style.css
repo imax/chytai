@@ -2602,8 +2602,6 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .sh-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
 .sh-acts .r-link { font-size: 14px; color: var(--r-ink2); }
 .sh-on { color: var(--r-ink2); font-size: 14px; }
-.sh .sh-q { width: 100%; max-width: 420px; box-sizing: border-box; font: 16px var(--r-sans); padding: 10px 14px; border: 1px solid var(--r-sline); border-radius: 999px; background: var(--r-btn); color: var(--r-ink); margin: 0 0 26px; display: block; }
-.sh .sh-q:focus { outline: none; border-color: var(--r-ink2); }
 .sh-rev { margin-bottom: 26px; }
 .sh-rrow { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--r-rule); cursor: pointer; }
 .sh-rrow .r-cover { width: 36px; box-shadow: none; }
@@ -2634,3 +2632,20 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .r-want-where .sh-to { padding: 0; font: inherit; text-align: left; }
 .sh-ask { font-size: 13px; }
 #shelf-dialog h2 + #sd-sub[hidden] + #sd-body { margin-top: 16px; }
+/* The top of one's own shelf (Max 2026-11-28, variant A with his changes): name and a pencil, one grey line, «+ Додати
+   книжки» and «Поділитися» in one row, the search like «Хочу прочитати»'s. */
+.sh-top { display: flex; align-items: center; gap: 6px; }
+.sh-top .sh-h { min-width: 0; }
+.sh .sh-sub { margin-bottom: 14px; }
+.sh-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin: 0 0 20px; }
+.sh-tool { display: inline-flex; align-items: center; gap: 7px; padding: 4px 0; border: none; background: none; color: var(--r-ochre); font: 500 15px var(--r-sans); cursor: pointer; }
+.sh-tool svg, .sh-pen svg, .sh-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sh-search { margin: 0 0 22px; max-width: 560px; }
+.sh-search svg { stroke: var(--r-ink2); }
+.sh-pen { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: none; color: var(--r-ink2); cursor: pointer; padding: 0; flex: none; }
+.sh-pen:hover { color: var(--r-ochre); }
+.sh-hpen { display: flex; margin-left: 2px; }
+.sh-hpen:empty { display: none; }
+@media (max-width: 760px) {
+  .sh .sh-up, .sh .sh-top { display: none; }
+}

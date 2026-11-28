@@ -11,6 +11,9 @@
   const $ = (s) => document.querySelector(s);
   const SPIN = `<span class="spinner"></span>`;
   const CAM = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+  const SHARE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M6 12v7h12v-7"/></svg>`;
+  const PEN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>`;
+  const LOUPE = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>`;
   const LIST = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>`;
   const plural = (n, a, b, c) => ((t, u) => (t > 10 && t < 20 ? c : u === 1 ? a : u >= 2 && u <= 4 ? b : c))(n % 100, n % 10);
   const nb = (n) => `${n} ${plural(n, "книжка", "книжки", "книжок")}`;
@@ -86,15 +89,18 @@
     const title = mine ? cur.name : label(cur);
     const seen = cur.seen?.length ? ` · додали ${cur.seen.map((s) => first(s.name)).join(", ")}` : "";
     const sub = mine ? `${nb(cur.books.length)}${seen}` : `Полиця: ${esc(cur.who)} · ${nb(cur.books.length)}`;
+    // The top of one's own shelf (Max 2026-11-28, variant A with his changes): a pencil by the name, «+ Додати книжки»
+    // as a button and «Поділитися» beside it, then the search: three lines where six were.
     const acts = mine
-      ? `<p class="sh-acts"><button type="button" class="r-pill" data-sh="share" data-act="shelf-share">Поділитися</button><button type="button" class="r-pill-line" data-sh="more" data-act="shelf-more">+ Додати книжки</button><button type="button" class="r-link" data-sh="rename" data-act="shelf-rename">Назва</button></p>`
+      ? `<p class="sh-tools"><button type="button" class="r-pill-line sh-add" data-sh="more" data-act="shelf-more">+ Додати книжки</button><button type="button" class="sh-tool" data-sh="share" data-act="shelf-share">${SHARE}Поділитися</button></p>`
       : cur.kind === "link" && !cur.on
         ? `<p class="sh-acts"><button type="button" class="r-pill" data-sh="follow" data-act="shelf-follow">Додати собі</button></p><p class="r-want-p">Полиця буде у ваших «Полицях», а її книжки в «Хочу прочитати».</p>`
         : `<p class="sh-acts"><span class="sh-on">✓ У ваших полицях</span><button type="button" class="r-link" data-sh="unfollow" data-act="shelf-unfollow">Прибрати</button></p>`;
-    const search = cur.books.length > 12 ? `<input class="lb-q sh-q" type="search" placeholder="Шукати на полиці" autocomplete="off" enterkeyhint="search" value="${esc(q)}" />` : "";
+    const search = cur.books.length > 12 ? `<label class="r-search sh-search">${LOUPE}<input class="sh-q" type="search" placeholder="Шукати на полиці" autocomplete="off" enterkeyhint="search" value="${esc(q)}" /></label>` : "";
+    const pen = mine ? pencil() : "";
     const empty = !cur.books.length ? `<p class="r-want-p">Поки порожньо.</p>` : "";
-    return `<section class="r-want sh">${up}<h1 class="r-jh sh-h">${esc(title)}</h1>
-      <p class="r-want-p">${sub}</p>${acts}${search}${empty}
+    return `<section class="r-want sh">${up}<div class="sh-top"><h1 class="r-jh sh-h">${esc(title)}</h1>${pen}</div>
+      <p class="r-want-p sh-sub">${sub}</p>${acts}${search}${empty}
       ${wanted.length && !q ? head("Є у вашому «Хочу прочитати»", wanted.length) + grid(wanted) : ""}
       ${cur.books.length ? head(q ? "Знайшлося" : "Усі", list.length) + grid(list) : ""}</section>`;
   }
@@ -123,9 +129,13 @@
     if (at === "list" || !cur || cur.error) return "Полиці";
     return cur.kind === "mine" || cur.own ? cur.name : label(cur);
   }
+  // The pencil by one's own shelf's name (in the phone's header too): «Назва полиці».
+  const pencil = () => `<button type="button" class="sh-pen" data-sh="rename" data-act="shelf-rename" aria-label="Змінити назву" title="Змінити назву">${PEN}</button>`;
   function html() {
     const h = $(".r-head-p h1");
     if (h) h.textContent = title();
+    const hx = $(".r-head-p .sh-hpen");
+    if (hx) hx.innerHTML = at !== "list" && at !== "review" && cur && !cur.error && (cur.kind === "mine" || cur.own) ? pencil() : "";
     if (at === "review" && rev) return reviewHtml();
     if (at !== "list") return shelfHtml();
     return listHtml();
@@ -433,6 +443,8 @@
     if (k === "unfollow") return unfollow(a);
   }
   document.addEventListener("click", click);
+  // The phone header's ‹ on a shelf goes to the list of shelves, not home.
+  $(".r-head-p .r-back")?.addEventListener("click", (e) => back() && (e.stopPropagation(), e.preventDefault()), true);
   $("#paper-found").addEventListener("click", (e) => {
     const d = e.target.closest("[data-sh-drop]");
     if (d) drop(d);

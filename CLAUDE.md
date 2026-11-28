@@ -1015,6 +1015,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   читати зараз» (only when the reader has a friend's shelf) and «У друзів» first in the card's «Де взяти». No messages,
   no contacts: they write each other themselves. Max hears of a shelf's first books and of every shelf added
   (`alertOwner`). Stats day `shelves`; AI label `reader:shelves`. Sheets in `#shelf-dialog` (styled with `#libs-dialog`).
+  The top of one's own shelf (Max 2026-11-28): a pencil by the name (in the phone's header too, `.sh-hpen`), one grey
+  line, «+ Додати книжки» and «Поділитися» in one row, the search like «Хочу прочитати»'s; the header's ‹ goes to the list.
   Locally without a key: `ANTHROPIC_BASE_URL` to a server that answers `{"books":[{title,author}]}`.
 - «Мої книгарні й бібліотеки» on the site too (Max 2026-11-28, variant C of canvas UfKURsapQDWb2P1VA9XtD5; `web/places.js`):
   one choice for the site and the reader, kept on the site (table `reader_places`: shops by name ≤5, branches {lib,
