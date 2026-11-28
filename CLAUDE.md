@@ -1056,7 +1056,14 @@ A flag only when Max asks for one, or when the change could break what readers u
   like Chrome: seen at once, never at a page's bottom or only in settings); a tap reloads on the new version. The
   settings keep «Версія від … · Оновити» (`#set-update`: asks the server, waits for the install, reloads). A new version another tab or window took over while this page stayed on screen also shows the button (`stale`; a tap reloads; Max 2026-11-26, a desktop window ran the day before's scripts), and a visible page looks for a new version on focus and every 30 min. Both on `window.chytaiUpdate` in web-bridge.js (`ready`, `apply`, `check`, `version`); sw.js answers
   the message «version» with its hash and `BUILT` (the first start of that hash, `DATA_DIR/sw-versions.json`, so a
-  restart serves the same sw.js). Which version a device runs: the page posts `/api/sw-state` 20 s after a load (and sw.js when an install fails); the reader's Fly log has «sw: owner iphone-app now=<hash> [waiting=… | FAILED …]». Try locally: change a file in src/renderer, restart the reader, `reg.update()`.
+  restart serves the same sw.js). Which version a device runs: the page posts `/api/sw-state` 20 s after a load (and sw.js when an install fails); the reader's Fly log has «sw: owner iphone-app now=<hash> [waiting=… | FAILED …]». The page also asks the server's /sw.js itself (`compare`: on load at 20 s, on focus at most every 2 min, «Оновити»):
+  WebKit left register() / update() / unregister() unsettled (Playwright's WebKit always; Max's iPhone 2026-11-28:
+  «Оновити» did nothing, a restart did), so `reg` comes from getRegistration() too, and a newer server version sets
+  `newer` (the button). `bringIn` asks update(), waits 8 s for a waiting worker, else deletes the old worker's cache
+  `chytai-<its version>` and reloads: that worker then serves the server's new files (`chytai:fresh` in localStorage
+  says which version the page runs). The log line adds `files=`, `server=` and `NO-REG`.
+  Try locally: change a file in src/renderer, restart the reader, `chytaiUpdate.check()` then `.apply()`, in Chromium
+  and in WebKit (recipe above).
 - Reader: covers the site sends the reader (`/api/reader-find`, `reader-want`, `reader-shelf`) are its /t/480 copies
   (`readerCover` in web/server.js), never a shop's original: dozens of full-size pictures left Android's WebView
   unpainted (bot №62). A new route that sends covers to the reader uses it.

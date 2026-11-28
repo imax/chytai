@@ -1424,7 +1424,7 @@ app.post("/api/sw-state", express.json({ limit: "2kb", type: () => true }), (req
   const b = req.body || {};
   const f = (v) => String(v || "").replace(/[^\w .:,/-]/g, "").slice(0, 300);
   const acct = currentAccount(req) === OWNER_ID ? "owner" : currentAccount(req) ? "reader" : "guest";
-  console.log(`sw: ${acct} ${deviceOf(req.get("user-agent") || "")} now=${f(b.v)}${b.waiting ? ` waiting=${f(b.waiting)}` : ""}${b.installing ? ` installing=${f(b.installing)}` : ""}${b.failed ? ` FAILED ${f(b.failed)}` : ""}`);
+  console.log(`sw: ${acct} ${deviceOf(req.get("user-agent") || "")} now=${f(b.v)}${b.files ? ` files=${f(b.files)}` : ""}${b.server && b.server !== b.v && b.server !== b.files ? ` server=${f(b.server)}` : ""}${b.reg ? " NO-REG" : ""}${b.waiting ? ` waiting=${f(b.waiting)}` : ""}${b.installing ? ` installing=${f(b.installing)}` : ""}${b.failed ? ` FAILED ${f(b.failed)}` : ""}`);
 });
 
 // Public: icon and manifest, so the phone can show them before login.

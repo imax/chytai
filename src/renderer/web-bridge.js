@@ -387,46 +387,105 @@
     // `stale`: a new version took over while this page was on screen (another tab or window swapped it in), so the
     // page runs yesterday's scripts until it reloads. A desktop window that never hides waited for that for a day
     // with no button (Max 2026-11-26: a topic's counts from the day before), so it says so like a waiting version.
+    // `newer`: the server has another version than the one this page runs, and the browser hasn't brought it in.
+    // Max 2026-11-28: on the iPhone «Оновити» did nothing, only a restart of the app found the new version. WebKit
+    // left the service worker's own calls hanging or answering before the new worker showed (register(), update()
+    // and unregister() never settled in Playwright's WebKit), so the page asks the server's sw.js itself.
     let stale = false;
-    const ready = () => stale || !!(reg?.waiting && navigator.serviceWorker.controller);
+    let newer = false;
+    const ready = () => stale || newer || !!(reg?.waiting && navigator.serviceWorker.controller);
     const tell = () => ready() && document.dispatchEvent(new Event("chytai:update"));
-    const watch = (w) => w?.addEventListener("statechange", () => w.state === "installed" && (tell(), whenIdle()));
+    const watch = (w) => w?.addEventListener("statechange", () => w.state === "installed" && (tell(), whenIdle(), swapNow && swap()));
     const swap = () => reg?.waiting?.postMessage("skipWaiting");
     // Only while the page is hidden. «No book open» was not enough: the check runs when the app comes
     // back to the front, and a new version found a few seconds later took over while a book was still
     // loading, so its text showed for a second and the page reloaded to white (Max, 2026-11-02).
     const whenIdle = () => document.hidden && swap();
+    const within = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), new Promise((r) => setTimeout(r, ms))]);
+    // The version the server serves now, straight from its sw.js (never cached: /sw.js is the server's, sw.js lets it
+    // through). null = no answer.
+    const serverVersion = async () => {
+      try {
+        const r = await fetch("/sw.js", { cache: "no-store" });
+        const text = r.ok ? await r.text() : "";
+        const version = text.match(/const VERSION = "(\w+)"/)?.[1];
+        return version ? { version, built: text.match(/const BUILT = "([^"]*)"/)?.[1] || "" } : null;
+      } catch {
+        return null;
+      }
+    };
+    // The files this page runs. After bringIn emptied an old worker's files (below), that worker serves the newer
+    // version's, fetched from the server: `chytai:fresh` = {sw, version, built} says which.
+    const runs = (mine) => {
+      try {
+        const f = JSON.parse(localStorage.getItem("chytai:fresh") || "null");
+        if (f && mine?.version === f.sw) return { version: f.version, built: f.built };
+      } catch {
+        /* no storage: the worker's own */
+      }
+      return mine;
+    };
+    // Is the server's version another than this page's? Sets `newer` (and the button) when it is.
+    let looked = 0;
+    const compare = async () => {
+      looked = Date.now();
+      const [there, mine] = await Promise.all([serverVersion(), versionOf(navigator.serviceWorker.controller).then(runs)]);
+      if (!there) return "offline";
+      if (!mine?.version || there.version === mine.version) return "none";
+      if (!newer) (newer = true), tell();
+      return "newer";
+    };
+    // A reload after the server's version was seen: the page takes the new worker as soon as it is installed.
+    let swapNow = (() => {
+      try {
+        const at = Number(sessionStorage.getItem("chytai:update-now") || 0);
+        sessionStorage.removeItem("chytai:update-now");
+        return Date.now() - at < 60000;
+      } catch {
+        return false;
+      }
+    })();
+    const use = (r) => {
+      if (!r || reg) return;
+      reg = r;
+      reg.addEventListener("updatefound", () => watch(reg.installing));
+      watch(reg.installing);
+      // A version found earlier and still waiting takes over as the page opens, before anything is read: a
+      // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
+      // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
+      if (reg.waiting && navigator.serviceWorker.controller) (swapNow = true), swap();
+      whenIdle();
+    };
     navigator.serviceWorker
       .register("/sw.js")
-      .then((r) => {
-        reg = r;
-        reg.addEventListener("updatefound", () => watch(reg.installing));
-        watch(reg.installing);
-        // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
-        // page lives for days. So the check is made whenever the app goes to the background or comes
-        // back, and when the network returns; a version found in the background takes over there.
-        const check = () => reg.update().catch(() => {});
-        document.addEventListener("visibilitychange", () => (check(), whenIdle()));
-        window.addEventListener("online", check);
-        // A computer's window may never hide: looked for on focus and every 30 minutes while on screen too.
-        window.addEventListener("focus", check);
-        setInterval(() => document.visibilityState === "visible" && check(), 30 * 60 * 1000);
-        // A version found earlier and still waiting takes over as the page opens, before anything is read: a
-        // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
-        // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
-        if (ready()) (swapNow = true), swap();
-        whenIdle();
-        // Which version this device runs and what waits, once a load, 20 s in (server log «sw: …»; 2026-11-20: Max's
-        // iPhone showed the old reader after many restarts, and nothing told why).
-        setTimeout(async () => {
-          const [mine, next] = await Promise.all([versionOf(navigator.serviceWorker.controller), versionOf(reg.waiting)]);
-          const body = JSON.stringify({ v: mine?.version || "old", waiting: next?.version || (reg.waiting ? "old" : ""), installing: reg.installing?.state || "" });
-          fetch("/api/sw-state", { method: "POST", body, keepalive: true }).catch(() => {});
-        }, 20000);
-      })
+      .then(use)
       .catch((err) => console.warn("service worker", err));
+    // register() may never settle (WebKit, above): the registration the page already has is enough for the rest.
+    navigator.serviceWorker.getRegistration().then(use, () => {});
+    // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
+    // page lives for days. So the check is made whenever the app goes to the background or comes
+    // back, and when the network returns; a version found in the background takes over there.
+    // The server is asked too (at most every 2 minutes), so the button shows even when the browser misses it.
+    const check = () => {
+      reg?.update().catch(() => {});
+      if (navigator.serviceWorker.controller && !ready() && Date.now() - looked > 120000) compare();
+    };
+    document.addEventListener("visibilitychange", () => (check(), whenIdle()));
+    window.addEventListener("online", check);
+    // A computer's window may never hide: looked for on focus and every 30 minutes while on screen too.
+    window.addEventListener("focus", check);
+    setInterval(() => document.visibilityState === "visible" && check(), 30 * 60 * 1000);
+    // Which version this device runs and what waits, once a load, 20 s in (server log «sw: …»; 2026-11-20: Max's
+    // iPhone showed the old reader after many restarts, and nothing told why).
+    setTimeout(async () => {
+      const [own, next, there] = await Promise.all([versionOf(navigator.serviceWorker.controller), versionOf(reg?.waiting), serverVersion()]);
+      const mine = runs(own);
+      const body = JSON.stringify({ v: own?.version || "old", files: mine !== own ? mine?.version : "", waiting: next?.version || (reg?.waiting ? "old" : ""), installing: reg?.installing?.state || "", server: there?.version || "", reg: reg ? "" : "none" });
+      fetch("/api/sw-state", { method: "POST", body, keepalive: true }).catch(() => {});
+      looked = Date.now();
+      if (there && mine?.version && there.version !== mine.version && !newer) (newer = true), tell();
+    }, 20000);
     let hadController = !!navigator.serviceWorker.controller;
-    let swapNow = false;
     let reloadWhenHidden = false;
     const reloadNow = () => (streams.size ? (reloadWhenHidden = true) : location.reload());
     navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -446,36 +505,47 @@
         setTimeout(() => resolve(null), 1500);
         w.postMessage("version", [ch.port2]);
       });
+    // The server's version is newer and no worker of it waits here: ask the browser for it and wait a while. If it
+    // doesn't come, the old worker's files go and the page reloads: that worker finds nothing kept and serves the
+    // server's files, the new version, and keeps them for offline. The new worker still comes when the browser gets
+    // to it (an app restart did, Max 2026-11-28) and takes over at once (`chytai:update-now`).
+    const bringIn = async () => {
+      swapNow = true;
+      if (reg?.waiting) return swap();
+      within(reg?.update(), 1);
+      for (let i = 0; i < 16 && !reg?.waiting; i++) await new Promise((r) => setTimeout(r, 500));
+      if (reg?.waiting) return swap();
+      const [own, there] = await Promise.all([versionOf(navigator.serviceWorker.controller), serverVersion()]);
+      try {
+        if (own?.version && there) {
+          await within(caches.delete(`chytai-${own.version}`), 3000);
+          localStorage.setItem("chytai:fresh", JSON.stringify({ sw: own.version, ...there }));
+        }
+        sessionStorage.setItem("chytai:update-now", String(Date.now()));
+      } catch {
+        /* no storage: the reload still asks for the new version */
+      }
+      location.reload();
+    };
     // «Оновити» on Мої книжки and in the settings (renderer.js).
     window.chytaiUpdate = {
       ready,
-      version: () => versionOf(navigator.serviceWorker.controller),
+      version: () => versionOf(navigator.serviceWorker.controller).then(runs),
       // Takes the waiting version now: the page reloads (a book on screen opens again at its place, chytai:onscreen).
       apply: () => {
         if (!ready()) return false;
         if (stale && !reg?.waiting) return location.reload(), true;
-        swapNow = true;
-        swap();
+        if (reg?.waiting) return (swapNow = true), swap(), true;
+        bringIn();
         return true;
       },
-      // Asks the server for a new version and waits while it comes: "ready", "none" or "offline".
+      // Asks the server for a new version: "ready", "none" or "offline".
       async check() {
-        if (!reg) return "none";
-        if (!ready()) {
-          try {
-            await reg.update();
-          } catch {
-            return "offline";
-          }
-        }
-        const w = reg.installing || reg.waiting;
-        if (!w || !navigator.serviceWorker.controller) return "none";
-        await new Promise((resolve) => {
-          const done = () => w.state !== "installing" && resolve();
-          w.addEventListener("statechange", done);
-          done();
-        });
-        return ready() ? "ready" : "offline";
+        if (ready()) return "ready";
+        if (!navigator.serviceWorker.controller) return "none";
+        within(reg?.update(), 1);
+        const got = await compare();
+        return got === "newer" ? "ready" : got;
       },
     };
   }
