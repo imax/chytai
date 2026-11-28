@@ -100,7 +100,7 @@
     const pen = mine ? pencil() : "";
     const empty = !cur.books.length ? `<p class="r-want-p">Поки порожньо.</p>` : "";
     return `<section class="r-want sh">${up}<div class="sh-top"><h1 class="r-jh sh-h">${esc(title)}</h1>${pen}</div>
-      <p class="r-want-p sh-sub">${sub}</p>${acts}${search}${empty}
+      <p class="r-want-p sh-sub">${sub}</p>${cur.about ? `<p class="sh-about">${esc(cur.about)}</p>` : ""}${acts}${search}${empty}
       ${wanted.length && !q ? head("Є у вашому «Хочу прочитати»", wanted.length) + grid(wanted) : ""}
       ${cur.books.length ? head(q ? "Знайшлося" : "Усі", list.length) + grid(list) : ""}</section>`;
   }
@@ -329,15 +329,22 @@
       fail(err);
     }
   }
+  // The pencil: the name and the owner's own words (Max 2026-11-28: whether they lend books, anything), shown under
+  // the name to everyone who opens the shelf.
   function renameSheet() {
     sheet("Полиця", "", `<input class="lb-q sh-name" type="text" maxlength="40" value="${esc(cur.name)}" autocomplete="off" />
+      <textarea class="sh-about-in" rows="4" maxlength="1000" placeholder="Про полицю: що тут стоїть, чи даєте книжки почитати…">${esc(cur.about || "")}</textarea>
       <p class="lb-note sh-del"><button type="button" class="r-link" data-sh="delete" data-act="shelf-delete">Видалити полицю</button></p>`, "Зберегти", async () => {
       const name = sheetName();
+      const about = (dlg().querySelector(".sh-about-in")?.value || "").trim().slice(0, 1000);
       dlg().close();
-      if (!name || name === cur.name) return;
+      const change = {};
+      if (name && name !== cur.name) change.name = name;
+      if (about !== (cur.about || "")) change.about = about;
+      if (!Object.keys(change).length) return;
       try {
-        await window.reader.shelfChange(cur.id, { name });
-        cur.name = name;
+        await window.reader.shelfChange(cur.id, change);
+        Object.assign(cur, change);
         redraw();
         load();
       } catch (err) {

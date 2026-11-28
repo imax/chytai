@@ -2656,3 +2656,7 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 @media (max-width: 760px) {
   .sh .sh-up, .sh .sh-top { display: none; }
 }
+/* A shelf's own words (the owner's, under the name) and their field in the pencil's sheet. */
+.sh .sh-about { margin: -6px 0 16px; font: 15px/1.5 var(--r-serif, var(--r-sans)); color: var(--r-ink); white-space: pre-line; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+#shelf-dialog .sh-about-in { width: 100%; box-sizing: border-box; font: 16px/1.45 var(--r-sans); padding: 10px 14px; border: 1px solid var(--r-sline); border-radius: 14px; background: var(--r-btn); color: var(--r-ink); resize: vertical; min-height: 96px; margin-bottom: 8px; }
+#shelf-dialog .sh-about-in:focus { outline: none; border-color: var(--r-ink2); }

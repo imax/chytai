@@ -1372,6 +1372,15 @@ app.use((req, res, next) => {
   // «Згадані книжки» over the explanations kept before the links (server/mentions.js): GET how far, POST {"run":true}
   // (or {"run":true,"acct":"<id>"} for one account) starts it; only with Max's OK in the thread.
   app.get("/agent/mentions", ok, (req, res) => res.json(mentionsFill));
+  // «Полиці» books the catalog lacked (shelfFill): the loop's counts and, per account with shelves, books in the
+  // catalog / waiting / not found.
+  app.get("/agent/shelf-fill", ok, (req, res) => {
+    const accts = {};
+    try {
+      for (const id of fs.readdirSync(ACCOUNTS_DIR)) if (fs.existsSync(path.join(ACCOUNTS_DIR, id, "shelves.json"))) accts[id] = shelves.tally(id);
+    } catch {}
+    res.json({ ...shelfFillState, busy: shelfFillBusy, accts });
+  });
   app.post("/agent/mentions", ok, express.json(), (req, res) => {
     if (!req.body?.run) return res.status(400).json({ error: "run" });
     if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: "no key" });
@@ -2118,11 +2127,53 @@ const shelfDay = () => {
   const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
   return (d.shelves ??= { photos: 0, lists: 0, cost: 0, accts: {} });
 };
+// Books on own shelves that the catalog lacked (Max 2026-11-28, «ставити в чергу додавання в каталог»): every 3 minutes,
+// and soon after books are added, five of one account go to the site's /api/reader-shelfbooks, which looks for them
+// again and outside (book.ua, Google Books, Open Library; no AI) and adds the ones it finds to the catalog; they take
+// their page and cover here. Not found = asked again in a month (shelves.js `RETRY_MS`). The site caps new books a
+// day (60 a reader, 200 for all). Status: GET /agent/shelf-fill.
+const shelfFillState = { runs: 0, found: 0, none: 0, errors: 0, last: null, lastError: "" };
+let shelfFillBusy = false;
+let shelfFillNext = 0; // the account to start from, in turn
+async function shelfFill() {
+  if (shelfFillBusy || !WEB_URL) return;
+  shelfFillBusy = true;
+  try {
+    let accts = [];
+    try {
+      accts = fs.readdirSync(ACCOUNTS_DIR).filter((id) => state.accounts[id]?.key && fs.existsSync(path.join(ACCOUNTS_DIR, id, "shelves.json")));
+    } catch {}
+    for (let i = 0; i < accts.length; i++) {
+      const acct = accts[(shelfFillNext + i) % accts.length];
+      const list = shelves.waiting(acct, 5);
+      if (!list.length) continue;
+      shelfFillNext = (shelfFillNext + i + 1) % accts.length;
+      const r = await fetch(`${WEB_URL}/api/reader-shelfbooks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, books: list.map((b) => ({ t: b.t, a: b.a })) }), signal: AbortSignal.timeout(120000) });
+      const a = await r.json().catch(() => ({}));
+      if (!Array.isArray(a.books)) throw new Error(`site ${r.status}`);
+      const found = shelves.filled(acct, list.map((b, j) => ({ ...b, r: a.books[j] })));
+      shelfFillState.runs++;
+      shelfFillState.found += found;
+      shelfFillState.none += a.books.filter((x) => x?.none).length;
+      shelfFillState.last = new Date().toISOString();
+      break;
+    }
+  } catch (err) {
+    shelfFillState.errors++;
+    shelfFillState.lastError = String(err.message || err).slice(0, 200);
+  } finally {
+    shelfFillBusy = false;
+  }
+}
+setInterval(shelfFill, 3 * 60 * 1000).unref();
+setTimeout(shelfFill, 60 * 1000).unref();
 const noShelves = guestsCannot("Без входу полиць немає.");
 const shelfWho = (acct) => `${accountName(acct)}${state.accounts[acct]?.username ? ` (https://chytai.org.ua/@${state.accounts[acct].username})` : ""}`;
 // Links a reader passes on name the public address (the app itself runs on chytai.fly.dev).
 const publicOrigin = (req) => (READER_DOMAIN ? `https://${READER_DOMAIN}` : `${req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.get("host")}`);
 const shelfUrl = (req, key) => `${publicOrigin(req)}/p/${key}`;
+// The owner's words as others see them: no Russian paragraphs (Max 2026-11-23, as notes on the site).
+const shelfAbout = (s) => String(s.about || "").split(/\n{2,}/).filter((p) => !/[ыэъё]/i.test(p)).join("\n\n");
 const shelfBooks = (s) => s.books.map((b) => ({ t: b.t, a: b.a, h: b.h, c: b.c }));
 const shelfFail = (res, err) => res.status(err.status || 500).json({ error: err.status ? err.message : "Не вийшло." });
 // The list: one's own shelves and the friends' ones, each with three covers for the row.
@@ -2145,12 +2196,16 @@ api.get("/shelves/:id", noShelves, (req, res) => {
   const { s } = shelves.own(req.acct, req.params.id);
   if (!s) return res.status(404).json({ error: "Полиці немає." });
   const seen = Object.entries(s.seen || {}).filter(([id]) => state.accounts[id]).sort((x, y) => y[1] - x[1]).map(([id]) => ({ id, name: accountName(id), username: state.accounts[id]?.username || "" }));
-  res.json({ shelf: { id: s.id, name: s.name, books: shelfBooks(s), link: s.key ? shelfUrl(req, s.key) : "", seen } });
+  res.json({ shelf: { id: s.id, name: s.name, about: s.about || "", books: shelfBooks(s), link: s.key ? shelfUrl(req, s.key) : "", seen } });
 });
 api.patch("/shelves/:id", noShelves, (req, res) => {
   const was = shelves.own(req.acct, req.params.id).s?.books.length || 0;
-  const r = shelves.change(req.acct, req.params.id, { name: req.body?.name, add: req.body?.add, drop: req.body?.drop });
+  const before = shelves.own(req.acct, req.params.id).s?.about || "";
+  const r = shelves.change(req.acct, req.params.id, { name: req.body?.name, about: req.body?.about, add: req.body?.add, drop: req.body?.drop });
   if (!r) return res.status(404).json({ error: "Полиці немає." });
+  if (r.added && r.shelf.books.some((b) => !b.h)) setTimeout(shelfFill, 5000).unref();
+  // The owner's words under the name are written by a reader: Max hears of them (not of his own).
+  if ((r.shelf.about || "") !== before && r.shelf.about && req.acct !== OWNER_ID) alertOwner(`Опис полиці в Читалці: ${r.shelf.name}`, `${shelfWho(req.acct)} написав(ла) про полицю «${r.shelf.name}»:\n\n${r.shelf.about}`);
   // A shelf's first books are a new thing a reader made: Max hears of it (not of his own).
   if (!was && r.shelf.books.length && req.acct !== OWNER_ID) alertOwner(`Полиця в Читалці: ${r.shelf.name}`, `${shelfWho(req.acct)} зробив(ла) полицю «${r.shelf.name}»: ${r.shelf.books.length} кн.\n\n${r.shelf.books.slice(0, 8).map((b) => `${b.t}${b.a ? ` — ${b.a}` : ""}`).join("\n")}`);
   res.json({ ok: true, n: r.shelf.books.length, added: r.added });
@@ -2192,7 +2247,7 @@ api.post("/shelves-read", noShelves, (req, res, next) => aiBudget(req, res, next
 api.get("/shelf/:key", noShelves, (req, res) => {
   const hit = shelves.open(req.params.key);
   if (!hit) return res.status(404).json({ error: "Такої полиці немає. Можливо, посилання вже змінили." });
-  res.json({ o: hit.o, id: hit.id, name: hit.shelf.name, who: accountName(hit.o), books: shelfBooks(hit.shelf), own: hit.o === req.acct, on: !!hit.shelf.seen?.[req.acct] });
+  res.json({ o: hit.o, id: hit.id, name: hit.shelf.name, about: hit.o === req.acct ? hit.shelf.about || "" : shelfAbout(hit.shelf), who: accountName(hit.o), books: shelfBooks(hit.shelf), own: hit.o === req.acct, on: !!hit.shelf.seen?.[req.acct] });
 });
 api.post("/shelf/:key/follow", noShelves, (req, res) => {
   let hit;
@@ -2209,7 +2264,7 @@ api.post("/shelf/:key/follow", noShelves, (req, res) => {
 api.get("/shelves/of/:o/:id", noShelves, (req, res) => {
   const s = shelves.friend(req.acct, req.params.o, req.params.id);
   if (!s) return res.status(404).json({ error: "Цієї полиці у вас уже немає." });
-  res.json({ shelf: { o: req.params.o, id: s.id, name: s.name, who: accountName(req.params.o), books: shelfBooks(s) } });
+  res.json({ shelf: { o: req.params.o, id: s.id, name: s.name, about: shelfAbout(s), who: accountName(req.params.o), books: shelfBooks(s) } });
 });
 api.delete("/shelves/of/:o/:id", noShelves, (req, res) => {
   shelves.unfollow(req.acct, req.params.o, req.params.id);

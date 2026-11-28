@@ -1401,6 +1401,34 @@ app.post("/api/reader-wantnew", async (req, res) => {
   const day = new Date().toISOString().slice(0, 10);
   const used = wantNewDay.get(id)?.day === day ? wantNewDay.get(id) : { day, n: 0 };
   if (used.n >= 10) return res.status(429).json({ error: "На сьогодні досить нових книжок." });
+  const got = await bookFromOutside(title, author);
+  if (!got) return res.status(404).json({ error: "Не знайшли цю книжку українською." });
+  if (got.had) return put(got.had);
+  const made = store.addBook({ ...got.book, source: "mention" });
+  wantNewDay.set(id, { day, n: used.n + 1 });
+  if (wantNewDay.size > 2000) wantNewDay.delete(wantNewDay.keys().next().value);
+  details({ ids: [made.id] });
+  const r = auth.reader(id);
+  if (id !== OWNER_ID) notifyOwner(`Нова книжка з Читалки: ${got.book.title}`, [`${r?.name || id}${r?.username ? ` (${SITE}/@${r.username})` : ""} хоче прочитати книжку, якої не було в каталозі (згадана в Читалці); тепер вона є:`, "", `${got.book.title}${got.book.author ? ` — ${got.book.author}` : ""}  ${SITE}${store.href(made.id)}  (${got.from})`].join("\n"));
+  put(made.id);
+});
+
+// A book the catalog lacks, looked up outside: its Ukrainian edition on book.ua, else Google Books / Open Library
+// (readerbooks `confirm`), never Russian or an audiobook. { book, from } to add, { had } when the found edition is in
+// the catalog after all, null when not found. `english`: a Latin title is looked up as an English book (Google Books /
+// Open Library only), as readers' English uploads are.
+async function bookFromOutside(title, author, { english = false } = {}) {
+  if (english && !/[а-яіїєґ]/i.test(title)) {
+    if (!author) return null;
+    const { confirm } = require("./readerbooks");
+    const g = await confirm({ title, author, language: "англійська" }, (q) => readerBooks.search(q)).catch(() => null);
+    if (!g || /[а-яіїєґыэъё]/i.test(g.title)) return null;
+    const gl = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(g.google || "") ? [{ label: "Google Books", url: g.google }] : [];
+    const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(g.cover || "") ? g.cover : "";
+    const book = { title: g.title.split(": ")[0], author: author || g.author, cover, links: gl, language: "англійська", ...(g.isbns?.length ? { isbns: g.isbns.slice(0, 20) } : {}), ...(Number(g.published) ? { published: Number(g.published) } : {}) };
+    const again = store.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });
+    return again ? { had: again } : { book, from: g.from || "Google Books" };
+  }
   const head = (t) => norm(String(t || "").split(/[:(]|\.\s|\s[-–—]\s/)[0]);
   let book = null;
   let from = "";
@@ -1416,16 +1444,64 @@ app.post("/api/reader-wantnew", async (req, res) => {
       (book = { title: title.split(": ")[0], author: author || g.author, cover, links: gl, language: "українська", ...(g.isbns?.length ? { isbns: g.isbns.slice(0, 20) } : {}), ...(Number(g.published) ? { published: Number(g.published) } : {}) }), (from = g.from || "Google Books");
     }
   }
-  if (!book || isRussian(book)) return res.status(404).json({ error: "Не знайшли цю книжку українською." });
+  if (!book || isRussian(book)) return null;
   const again = store.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });
-  if (again) return put(again);
-  const made = store.addBook({ ...book, source: "mention" });
-  wantNewDay.set(id, { day, n: used.n + 1 });
-  if (wantNewDay.size > 2000) wantNewDay.delete(wantNewDay.keys().next().value);
-  details({ ids: [made.id] });
-  const r = auth.reader(id);
-  if (id !== OWNER_ID) notifyOwner(`Нова книжка з Читалки: ${book.title}`, [`${r?.name || id}${r?.username ? ` (${SITE}/@${r.username})` : ""} хоче прочитати книжку, якої не було в каталозі (згадана в Читалці); тепер вона є:`, "", `${book.title}${book.author ? ` — ${book.author}` : ""}  ${SITE}${store.href(made.id)}  (${from})`].join("\n"));
-  put(made.id);
+  return again ? { had: again } : { book, from };
+}
+
+// Books on a reader's «Полиці» that the catalog lacked when the photo or list was read (Max 2026-11-28: «ставити в
+// чергу додавання в каталог»). The reader sends a few at a time (server/index.js `shelfFill`): each is looked for in
+// the catalog again, then outside (bookFromOutside, English editions too); a found one becomes a book (source `shelf`,
+// no AI: the new-books queue checks it as any reader's book) and comes back with its page and cover; `none` = not
+// found (the reader asks again in a month). 60 new books a reader a day, 200 for all (meta `shelfbooks:<day>`);
+// over that 429. Max hears of a batch's new books from other readers (one letter + Telegram).
+app.post("/api/reader-shelfbooks", async (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const list = (Array.isArray(req.body?.books) ? req.body.books : []).slice(0, 5).map((b) => ({ t: String(b?.t || "").trim().slice(0, 200), a: String(b?.a || "").trim().slice(0, 150) })).filter((b) => b.t.length > 1);
+  const day = new Date().toISOString().slice(0, 10);
+  const count = JSON.parse(store.db.get(`shelfbooks:${day}`) || "{}");
+  const mine = () => count[id] || 0;
+  const all = () => Object.values(count).reduce((x, y) => x + y, 0);
+  const found = (bookId) => {
+    const b = store.book(bookId) || {};
+    return { href: `${SITE}${store.href(bookId)}`, title: b.title || "", author: b.author || "", cover: readerCover(b.cover) };
+  };
+  const out = [];
+  const made = [];
+  for (const b of list) {
+    // The catalog by its title, else by the search with every word whole and the same author («Сапієнс» = «Sapiens.
+    // Людина розумна»: the reader's own match wants the read words in the title).
+    const had = store.findWork({ title: b.t, author: b.a }) || (b.a ? store.search(`${b.t} ${b.a}`, { limit: 5 }).find((h) => h.whole && sameAuthor(b.a, h.book.author || ""))?.book.id : null);
+    if (had) {
+      out.push(found(store.canonical(had)));
+      continue;
+    }
+    if (mine() >= 60 || all() >= 200) {
+      out.push({ wait: true });
+      continue;
+    }
+    const got = await bookFromOutside(b.t, b.a, { english: true }).catch(() => null);
+    if (!got) {
+      out.push({ none: true });
+      continue;
+    }
+    if (got.had) {
+      out.push(found(store.canonical(got.had)));
+      continue;
+    }
+    const m = store.addBook({ ...got.book, source: "shelf" });
+    count[id] = mine() + 1;
+    made.push({ id: m.id, ...got });
+    out.push(found(m.id));
+  }
+  if (made.length) {
+    store.db.set(`shelfbooks:${day}`, JSON.stringify(count));
+    store.db.prepare("DELETE FROM meta WHERE key LIKE 'shelfbooks:%' AND key < ?").run(`shelfbooks:${new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)}`);
+    const r = auth.reader(id);
+    if (id !== OWNER_ID) notifyOwner(`Нові книжки з полиць у Читалці: ${made.length}`, [`${r?.name || id}${r?.username ? ` (${SITE}/@${r.username})` : ""} має на полиці книжки, яких не було в каталозі; тепер вони є:`, "", ...made.map((x) => `${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""}  ${SITE}${store.href(x.id)}  (${x.from})`)].join("\n"));
+  }
+  res.status(out.some((x) => x.wait) && !out.some((x) => !x.wait) ? 429 : 200).json({ books: out });
 });
 
 // The account's whole shelf here, short, for the reader's «Нотатки» (Max 2026-11-25: a topic's books and the books it

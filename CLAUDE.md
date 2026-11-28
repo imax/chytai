@@ -1019,6 +1019,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   читати зараз» (only when the reader has a friend's shelf) and «У друзів» first in the card's «Де взяти». No messages,
   no contacts: they write each other themselves. Max hears of a shelf's first books and of every shelf added
   (`alertOwner`). Stats day `shelves`; AI label `reader:shelves`. Sheets in `#shelf-dialog` (styled with `#libs-dialog`).
+  Books the catalog lacked (Max 2026-11-28, «ставити в чергу додавання в каталог»): `shelfFill` in server/index.js, every
+  3 min (and 5 s after books are added), sends five of one account's book with no page to the site's
+  `POST /api/reader-shelfbooks` (catalog again, also by search with every word whole and the same author; then
+  `bookFromOutside`: book.ua's Ukrainian edition, else Google Books / Open Library, a Latin title as an English book;
+  no AI), which adds a found one (source `shelf`, 60 a reader / 200 a day, meta `shelfbooks:<day>`; Max hears of other
+  readers' new books) and answers page and cover; not found = `q` on the book, asked again in a month (`RETRY_MS`).
+  Status: `curl -s https://app.chytai.org.ua/agent/shelf-fill -H "$H"` (counts per account).
+  The pencil's sheet has the shelf's own words under the name (`about`, 1,000 characters; Max 2026-11-28, «чи даю я
+  книжки»), shown under the shelf's line to the owner and to followers (Russian paragraphs left out, `shelfAbout`);
+  a reader's new words mail + Telegram Max.
   The top of one's own shelf (Max 2026-11-28): a pencil by the name (in the phone's header too, `.sh-hpen`), one grey
   line, «+ Додати книжки» and «Поділитися» in one row, the search like «Хочу прочитати»'s; the header's ‹ goes to the list.
   Locally without a key: `ANTHROPIC_BASE_URL` to a server that answers `{"books":[{title,author}]}`.

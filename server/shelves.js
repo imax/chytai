@@ -21,6 +21,8 @@ const FOLLOWS_MAX = 100; // shelves an account adds
 const SEEN_MAX = 200; // readers who added one shelf
 const LIST_MAX = 300; // lines of a pasted list read at once
 const NAME_MAX = 40;
+const ABOUT_MAX = 1000; // the owner's own words under the name (Max 2026-11-28: whether they lend books, anything)
+const RETRY_MS = 30 * 24 * 3600 * 1000; // a book no catalog had is looked for again after a month
 
 const PHOTO_PROMPT = `This is a photo of books standing on a shelf or lying in a pile: spines, sometimes covers. List every book whose title you can read.
 For each: the title and the author as printed (keep the language and spelling; on a Ukrainian spine the author's surname is often printed alone, give it as printed). Leave out series names, publishers and slogans. Never guess a title you cannot read; leave out a book you can't read.
@@ -84,11 +86,12 @@ class Shelves {
     this.save(acct, d);
     return s;
   }
-  // Rename, add books (a catalog page or title + author once), take some off by index.
-  change(acct, id, { name, add, drop } = {}) {
+  // Rename, the owner's words, add books (a catalog page or title + author once), take some off by index.
+  change(acct, id, { name, about, add, drop } = {}) {
     const { d, s } = this.own(acct, id);
     if (!s) return null;
     if (name != null && clean(name, NAME_MAX)) s.name = clean(name, NAME_MAX);
+    if (about != null) s.about = String(about).replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, ABOUT_MAX);
     const was = s.books.length;
     if (Array.isArray(drop) && drop.length) {
       const off = new Set(drop.map(Number));
@@ -207,6 +210,53 @@ class Shelves {
       const refs = [b, ...(b.other || [])].flatMap((v) => [...(byPath.get(pathOf(v.href)) || []), ...(byKey.get(bookKey(v.title, v.author)) || [])]);
       return refs.filter((r, i) => refs.findIndex((x) => x.o === r.o && x.id === r.id) === i).map(({ who, name, o, id }) => ({ who, name, o, id }));
     };
+  }
+
+  // ——— books the catalog lacked, added to it later (server/index.js `shelfFill`, the site's /api/reader-shelfbooks) ———
+  // An own shelf's books with no catalog page, not asked about in the last month: [{ id, k, t, a }], `n` at most.
+  waiting(acct, n = 5) {
+    const out = [];
+    const now = Date.now();
+    for (const s of this.load(acct).mine)
+      for (const b of s.books) {
+        if (out.length >= n) return out;
+        if (!b.h && !(now - (b.q || 0) < RETRY_MS)) out.push({ id: s.id, k: bookKey(b.t, b.a), t: b.t, a: b.a });
+      }
+    return out;
+  }
+  // The site's answers: a found book takes its page and cover (once on a shelf: a second copy goes); `none` = asked.
+  filled(acct, answers) {
+    const d = this.load(acct);
+    let n = 0;
+    for (const { id, k, r } of answers) {
+      const s = d.mine.find((x) => x.id === id);
+      const b = s?.books.find((x) => !x.h && bookKey(x.t, x.a) === k);
+      if (!b || !r || r.wait) continue;
+      if (r.href) {
+        if (s.books.some((x) => x.h && pathOf(x.h) === pathOf(r.href))) {
+          s.books = s.books.filter((x) => x !== b);
+          continue;
+        }
+        Object.assign(b, { h: clean(r.href, 300), c: /^https?:\/\//.test(r.cover || "") ? clean(r.cover, 500) : b.c, t: clean(r.title, 200) || b.t, a: clean(r.author, 150) || b.a });
+        delete b.q;
+        n++;
+      } else b.q = Date.now();
+    }
+    this.save(acct, d);
+    return n;
+  }
+  // How many own-shelf books wait for the catalog, were not found, and are in it: for /agent/shelf-fill.
+  tally(acct) {
+    const t = { books: 0, catalog: 0, waiting: 0, notFound: 0 };
+    const now = Date.now();
+    for (const s of this.load(acct).mine)
+      for (const b of s.books) {
+        t.books++;
+        if (b.h) t.catalog++;
+        else if (now - (b.q || 0) < RETRY_MS) t.notFound++;
+        else t.waiting++;
+      }
+    return t;
   }
 
   // ——— reading a photo or a list ———
