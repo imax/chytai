@@ -251,7 +251,7 @@ function entryMeta(e) {
 }
 
 // A book in a list (shelves, search): cover, title, author, stars and the note, an action on the right.
-function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "", others = [], sub = "" } = {}) {
+function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "", others = [], sub = "", extra = "" } = {}) {
   const alt = others.length ? others.map((o) => ` · ${twinLabel(book, o).toLowerCase()}: <a class="text-link" href="${attr(o.href)}">${esc(o.title)}</a>`).join("") : book.altTitle ? ` · ${esc(book.altTitle)}` : "";
   // The card that stands for a whole series is called by the series («Експансія», not «Експансія. Кн. 1. …»).
   const ser = book.series;
@@ -264,7 +264,7 @@ function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "
     <p class="by">${book.author ? authorLinks(book.author) : ""}${alt}</p>
     ${meta || entry ? `<p class="meta">${meta || entryMeta(entry)}</p>` : ""}
     ${entry?.note ? `<p class="note">${noteOf(entry, book.id)}</p>` : ""}
-    ${sub ? `<p class="small muted">${sub}</p>` : ""}
+    ${sub ? `<p class="small muted">${sub}</p>` : ""}${extra}
   </div>
   ${action ? `<div class="row-act">${action}</div>` : ""}
 </article>`;
@@ -466,7 +466,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Також сподобалось", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
+function bookPage({ places = null, club = [], ukrlib = null, sluhay = null, bookflow = null,inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Також сподобалось", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -496,7 +496,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inG
         ${ru ? "" : eventLine(event)}
         ${twins(book)}
         ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl)}
-        ${where(book, ukrlib, sluhay, bookflow)}
+        ${where(book, ukrlib, sluhay, bookflow, places)}
         ${user?.owner ? `<p class="book-tools small">${ownerItems(book, user)}</p>` : ""}
       </div>
     </article>
@@ -795,7 +795,12 @@ function mine(book, entry, user, now = false, readUrl = "") {
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links (a hand-picked free text, openlinks.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
-function where(book, ukrlib = null, sluhay = null, bookflow = null) {
+// «Мої книгарні й бібліотеки» (`places`, places.js; Max 2026-11-28, variant C): when a reader's own shop has the book in
+// stock, only those rows show, in bold, and the rest folds under «Ще де взяти»; app.js does the same for the reader's
+// library branches. When none of theirs has it, everything as before. A line under it names theirs, «змінити».
+// «Формати» (places.js, Max 2026-11-28, variant Б): an e-book row says its files («EPUB, PDF», «лише Kindle», «у
+// застосунку»); with formats picked one's own rows are only those in them, and formats without shops = any shop.
+function where(book, ukrlib = null, sluhay = null, bookflow = null, places = null) {
   const seen = new Set();
   // A free recording from «Слухай» (sluhay.js) is one more audio edition.
   const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
@@ -839,21 +844,35 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
   const go = (e, cls = "") => (e.shelf.id === "chytai-free" ? `<a${cls} href="/publishers/chytai-free">` : `<a${cls} href="${attr(e.links[0].url)}" target="_blank" rel="noopener">`);
   // The free shelf's file sits on its line (Max, 2026-10-30: out of the «⋯» menu).
-  const short = (e) => {
-    const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+  const fl = (e) => require("./places").label(e);
+  const short = (e, bold = false) => {
+    const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, fl(e), e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    return `${bold ? "<b>" : ""}${go(e)}${esc(e.shelf.name)}</a>${bold ? "</b>" : ""}${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const full = (e) => {
-    const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, fl(e), e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const row = (label, first, rest = "") => `<div class="where-row"><span class="where-kind">${label}</span><span class="where-what">${first}${rest}</span></div>`;
+  // The reader's own shops that have it now: one row a format, each shop once (its cheapest), cheapest first; those rows
+  // leave the folded rest.
+  const myShops = places?.shops || [];
+  const myFormats = places?.formats || [];
+  const ours = (e) => (myShops.length ? myShops.includes(e.shelf.name) : myFormats.length > 0) && require("./places").fits(e, myFormats);
+  const mine = [];
+  for (const [k, label] of kinds) {
+    const list = have.filter((e) => e.status === "є" && kindOf(e) === k && ours(e)).sort((a, b) => price(a) - price(b));
+    const one = list.filter((e, i) => list.findIndex((x) => x.shelf.name === e.shelf.name) === i);
+    if (one.length) mine.push([label, one]);
+  }
+  const mineEds = new Set(mine.flatMap(([, l]) => l));
+  const others = have.filter((e) => !mineEds.has(e));
   const rows = [];
   for (const [k, label] of kinds) {
     // The publisher's own shop first when it has the book (pubshops.js; Max 2026-11-26: «Завжди першим», even when
     // Megogo is cheaper), then in stock, then the cheapest.
     const first = (e) => (e.own && e.status === "є" ? 0 : 1);
-    const list = have.filter((e) => kindOf(e) === k).sort((a, b) => first(a) - first(b) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b));
+    const list = others.filter((e) => kindOf(e) === k).sort((a, b) => first(a) - first(b) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b));
     if (!list.length) continue;
     // A shop named once in the short line; its other editions wait under «ще».
     const firstShops = [];
@@ -870,7 +889,17 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   // BookFlow (bookflow.js): a copy a reader lends, one price for any book; last, right above the libraries
   // (app.js adds them), the other way to borrow. All copies out is still a row (Max 2026-11-17).
   if (bookflow) rows.push(row("Напрокат", `<a href="${attr(bookflow.url)}" target="_blank" rel="noopener">BookFlow</a>${bookflow.free ? `<span class="ok">, є вільна</span>` : `<span class="muted">, зараз усі в читачів</span>`}${bookflow.once ? `<span class="muted">, ${bookflow.once} ₴ за книжку</span>` : ""}`));
-  return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
+  // Under it, which places are the reader's, or how to pick them (a signed-in reader only).
+  const myLibs = places?.libs || [];
+  const theirs = [[...myShops, ...(myLibs.length ? [count(myLibs.length, "бібліотека", "бібліотеки", "бібліотек")] : [])].join(", "), myFormats.length ? require("./places").only(myFormats) : ""].filter(Boolean);
+  const change = `/settings/places?back=${encodeURIComponent(book.href || "")}`;
+  const foot = !places ? "" : theirs.length ? `<p class="where-foot small muted">Ваші: ${esc(theirs.join(" · "))} · <a class="text-link" href="${attr(change)}">змінити</a></p>` : `<p class="where-foot small muted"><a class="text-link" href="${attr(change)}">Оберіть свої книгарні й бібліотеки</a>, і вони будуть тут першими.</p>`;
+  const src = ` data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"`;
+  if (!mine.length) return `<div class="where${rows.length ? "" : " hidden"}" data-block="where"${src}><span class="where-label">Де взяти</span>${rows.join("")}${foot}</div>`;
+  // The names under «Ще де взяти»: the other shops, the free texts, BookFlow (app.js adds «бібліотеки»).
+  const names = [...new Set([...others.filter((e) => e.status !== "немає").map((e) => e.shelf.name), ...links.map((l) => l.label), ...(bookflow ? ["BookFlow"] : [])])];
+  const restBox = rows.length ? `<details class="where-rest"><summary>Ще де взяти: <span class="where-names">${esc(names.length > 4 ? `${names.slice(0, 3).join(", ")} і ще ${names.length - 3}` : names.join(", "))}</span></summary>${rows.join("")}</details>` : "";
+  return `<div class="where" data-block="where"${src}><span class="where-label">Де взяти</span><div class="where-mine">${mine.map(([label, l]) => row(label, l.map((e) => short(e, true)).join(` <span class="muted">·</span> `))).join("")}</div>${restBox}${foot}</div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and where to get it.
@@ -1264,7 +1293,7 @@ function twoParts(items, n, part) {
   return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
 }
 
-function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], savedLists = [], favOffer = null, rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ yours = null, ask = null, part = "", clubTopics = [], lists = [], savedLists = [], favOffer = null, rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1287,7 +1316,10 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
     ...(mine.some((r) => isUk(r.book)) && mine.some((r) => !isUk(r.book)) ? [["uk", "Українською"]] : []),
     ...[...fams].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => [`f:${k}`, FAMILIES.find(([key]) => key === k)[1]]),
   ];
-  const pickRow = picks.length > 1 ? `<div class="shelf-picks">${picks.map(([v, l]) => `<button type="button" class="chip" data-pick-v="${attr(v)}">${esc(l)}</button>`).join("")}</div>` : "";
+  // «Є у ваших · N» first on one's own shelf (yours: server.js yoursOf, Max 2026-11-28): the wanted books one's own shops
+  // or library branches have now.
+  if (own && yours?.size) picks.unshift(["yours", `Є у ваших · ${yours.size}`]);
+  const pickRow = picks.length > 1 || picks[0]?.[0] === "yours" ? `<div class="shelf-picks">${picks.map(([v, l]) => `<button type="button" class="chip" data-pick-v="${attr(v)}">${esc(l)}</button>`).join("")}</div>` : "";
   // Another reader's tabs say what they did («Читає»), since we don't know how they'd say it themselves.
   const tabs = [
     ["", "Усі", mine.length],
@@ -1311,8 +1343,10 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
       const search = [r.series?.name, ...vols.flatMap((v) => [v.book.title, v.book.altTitle, stripMd(v.note || "")]), b.author, b.authorOrig].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-fam="${famsOf(b).join("|")}" data-uk="${isUk(b) ? 1 : ""}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
+      const y = !r.volumes && yours?.get(r.id);
+      const yoursLine = y ? `<p class="small yours">${[...y.shops.map((s) => `<b><a href="${attr(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></b>${s.price ? ` <span class="muted">${esc(s.price)}</span>` : ""}`), ...y.libs.map((l) => `<b><a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.branch.replace(/^бібліотека\s+/i, ""))}</a></b> ${l.state === "on" ? `<span class="ok">на полиці</span>` : `<span class="muted">є</span>`}`)].join(` <span class="muted">·</span> `)}</p>` : "";
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? (rateable(mineIds.get(r.id), r.id) ? rateLine(r.id) : myStatus(mineIds.get(r.id))) : markButtons(b, user)) : "";
-      return [head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data })), !r.kids];
+      return [head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data: y ? `${data} data-yours="1"` : data, extra: yoursLine })), !r.kids];
     });
   const parts = twoParts(list, FIRST.rows, part);
   if (part === "rest") return parts;
@@ -2944,7 +2978,7 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
 
 // The settings' two tabs: the account itself, and the letters (Max, 2026-10-22: «вкладку в налаштуваннях, де
 // будуть різні імейли»).
-const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"], ["chats", "/settings/chats", "AI-чати"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
+const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"], ["chats", "/settings/chats", "AI-чати"], ["places", "/settings/places", "Книгарні й бібліотеки"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
 
 // /settings/mail: every letter the site sends, the ones a reader can switch and the ones that come only when asked.
 function mailSettingsPage({ user, values, saved = false, calSubs = [] }) {
@@ -2966,6 +3000,39 @@ function mailSettingsPage({ user, values, saved = false, calSubs = [] }) {
 </section>`;
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
+
+// /settings/places (places.js; Max 2026-11-28, variant C of canvas UfKURsapQDWb2P1VA9XtD5, a page of its own): the
+// reader's shops and library branches, 5 of each, one choice for the site and the reader. A city's branches fold.
+function placesSettingsPage({ user, values, formats = [], choices, libs, saved = false, back = "" }) {
+  const box = (name, value, title, note = "", on = false) => `<label class="check"><span><input type="checkbox" name="${name}" value="${attr(value)}"${on ? " checked" : ""}> ${esc(title)}${note ? ` <span class="muted small">${esc(note)}</span>` : ""}</span></label>`;
+  const shopOn = (n) => values.shops.includes(n);
+  const pubsOn = choices.publishers.filter(shopOn);
+  const libOn = (l, b) => values.libs.some((p) => p.lib === l && p.branch === b);
+  const sameCity = (l) => libs.filter((x) => x.city === l.city).length > 1;
+  const cities = libs.filter((l) => l.branches.length).map((l) => {
+    const on = l.branches.filter((b) => libOn(l.id, b.name));
+    const list = [...on, ...l.branches.filter((b) => !on.includes(b))];
+    return `<details class="city"${on.length ? " open" : ""}><summary>${esc(l.city)}${sameCity(l) ? ` <span class="muted small">${esc(l.name)}</span>` : ""}${on.length ? ` <span class="muted small">· обрано ${on.length}</span>` : ""}</summary><div class="lib-list">${list.map((b) => box("lib", `${l.id}|${b.name}`, b.name, "", libOn(l.id, b.name))).join("")}</div></details>`;
+  });
+  const form = `${settingsTabs("places")}<form method="post" action="/settings/places" class="form places-form">
+  ${saved ? `<p class="saved">Збережено.</p>` : ""}
+  ${back ? `<input type="hidden" name="back" value="${attr(back)}">` : ""}
+  <p class="muted small">Коли книжка є в них, «Де взяти» на сторінці книжки і в Читалці покаже тільки їх, а решту згорне. До ${PLACES_MAX} книгарень і ${PLACES_MAX} бібліотек.</p>
+  <h3>Книгарні</h3>
+  ${choices.shops.map((s) => box("shop", s.name, s.name, s.note, shopOn(s.name))).join("")}
+  <details class="city"${pubsOn.length ? " open" : ""}><summary>Магазини видавництв${pubsOn.length ? ` <span class="muted small">· обрано ${pubsOn.length}</span>` : ""}</summary><div class="lib-list">${[...pubsOn, ...choices.publishers.filter((n) => !shopOn(n))].map((n) => box("shop", n, n, "", shopOn(n))).join("")}</div></details>
+  <h3>Формати</h3>
+  <p class="muted small">Лише книжки в цих форматах. Kindle: ті, що Book.ua надсилає на Kindle.</p>
+  ${formats.map((f) => box("format", f.code, f.name, "", (values.formats || []).includes(f.code))).join("")}
+  <h3>Бібліотеки</h3>
+  <label class="lib-search"><input type="search" class="lib-q" placeholder="назва або вулиця" aria-label="Шукати бібліотеку"></label>
+  ${cities.join("")}
+  <p class="muted small places-note" hidden>Можна обрати до ${PLACES_MAX}.</p>
+  <div class="actions"><button class="btn primary">Зберегти</button>${back ? `<a class="text-link small" href="${attr(back)}">Назад до книжки</a>` : ""}</div>
+</form>`;
+  return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
+}
+const PLACES_MAX = 5; // places.js SHOPS_MAX, LIBS_MAX
 
 // /mcp in a browser: what Chytai in Claude or ChatGPT is and how to connect it (Max, 2026-10-23: «маленький лендінг про цей mcp»).
 // The same 5/7 frame as /welcome: what it is on the left, the steps on the right.
@@ -4240,6 +4307,7 @@ module.exports = {
   nowPage,
   letterEditorPage,
   mailSettingsPage,
+  placesSettingsPage,
   dupesPage,
   volumesPage,
   reviewsAdminPage,

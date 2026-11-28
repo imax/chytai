@@ -908,7 +908,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
-- Reader «Нотатки» (Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
+- Reader «Мої нотатки» (named so 2026-11-28, design review: the book's own sheet is «Нотатки», this page all of them; Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
   a research folder, on the server so phone and computer show the same (Max: «як obsidian/notion в плані кросс-девайсу»).
   Panel after «Хочу прочитати» (`r-pnav-scratch`, page `scratch`, `src/renderer/scratch.js`). Topics are listed by the last change
   (`updated`: `touched`, thoughts, books added; newest on top, Max 2026-11-26). The in-book «Нотатки»
@@ -1016,6 +1016,26 @@ A flag only when Max asks for one, or when the change could break what readers u
   no contacts: they write each other themselves. Max hears of a shelf's first books and of every shelf added
   (`alertOwner`). Stats day `shelves`; AI label `reader:shelves`. Sheets in `#shelf-dialog` (styled with `#libs-dialog`).
   Locally without a key: `ANTHROPIC_BASE_URL` to a server that answers `{"books":[{title,author}]}`.
+- «Мої книгарні й бібліотеки» on the site too (Max 2026-11-28, variant C of canvas UfKURsapQDWb2P1VA9XtD5; `web/places.js`):
+  one choice for the site and the reader, kept on the site (table `reader_places`: shops by name ≤5, branches {lib,
+  branch} ≤5, `at`). Set on /settings/places (tab «Книгарні й бібліотеки»; `back` = the book page «змінити» came from)
+  or in the reader's dialog: the reader's PATCH /settings sends it to `POST /api/reader-places` with `placesAt`, and
+  `/api/want` sends its copy to `/api/reader-want`, which answers `places`; the newer wins (`places.sync`), a reader's
+  old picks came over on its first ask. «Де взяти» (pages.js `where(…, places)`): when one's own shop has the book in
+  stock only those rows show, bold (`.where-mine`), the rest under «Ще де взяти» (`.where-rest`); `/api/libraries/:id`
+  marks one's own branches `mine` and app.js adds them on top (folding the rows then if no shop of theirs had it);
+  none of theirs = as before. Under it «Ваші: … · змінити» or «Оберіть свої…». One's own shelf: chip «Є у ваших · N»
+  (`yoursOf` in server.js, want rows only, libraries from the cache + `libraries.fill`).
+- «Формати» (Max 2026-11-28, variant Б of canvas SqmWq3J5cbW2yAgofvw5g7, hotsyk: «шукаю тільки epub»): `formats` in the
+  same choice (column `reader_places.formats`, codes paper / epub / pdf / kindle / audio / app, `places.FORMATS`); the
+  reader's dialog's third tab and a block on /settings/places; settings `formats` in the reader, synced like the shops.
+  An edition row's codes and words: `places.codes(e)` / `places.label(e)` («EPUB, PDF», «лише Kindle», «у застосунку»)
+  from shelf items' `files` (EPUB, PDF, MOBI…), `kindle`, `app`: Book.ua by GraphQL each refresh (`bookuaFiles`:
+  `downloadable_product_links`, a file only when `isDownloadAllowed`; «лише на Kindle» = none allowed, Kindle yes),
+  Старий Лев's product detail `ebook_formats`, Гуманітарка's «(електронна версія …)», КСД `app`. A shop that says
+  nothing (MEGOGO, Yakaboo) fits no e-format. Own rows (`where`'s `mine`, the reader's `inMine`, `yoursOf`) = in a
+  picked shop (or any shop when none) and `places.fits(e, formats)`; `stock` rows are [price, url, kind, codes, label],
+  a row in the formats first; `get` shops carry `fmt` and `codes`.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone), and only when the reader

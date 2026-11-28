@@ -167,7 +167,7 @@
   // The whole list, by the book they were met in.
   function mentionsHtml() {
     const mb = mentBooks();
-    let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Нотатки</button><h1 class="r-scr-t">Згадані книжки</h1>`;
+    let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Мої нотатки</button><h1 class="r-scr-t">Згадані книжки</h1>`;
     if (!mb.length) return `${html}<p class="r-empty">Тут будуть книжки, які згадуються в поясненнях і в тексті ваших книжок.</p></section>`;
     html += `<p class="mn-lead">${knyh(mentCount(mb))} з пояснень і з тексту ваших книжок</p>`;
     for (const [p, l] of mb) html += head(`«${esc(libBook(p).title)}» · ${l.length}`) + l.map((e) => mrow(e, p)).join("");
@@ -237,7 +237,7 @@
   const quote = (n) => (n?.quote ? `<span class="nx-q">${n.own ? `<span class="nx-own">${esc(n.quote)}</span>` : `<span>${esc(n.quote)}</span>`}${n.comment ? `<em>${esc(n.comment)}</em>` : ""}</span>` : "");
 
   function listHtml() {
-    let html = `<section class="r-scr nx"><h1 class="r-jh">Нотатки</h1>${formHtml()}<div class="nx-main"${q.trim() ? " hidden" : ""}>`;
+    let html = `<section class="r-scr nx"><h1 class="r-jh">Мої нотатки</h1>${formHtml()}<div class="nx-main"${q.trim() ? " hidden" : ""}>`;
     if (!items) return `${html}<p class="r-empty">${failed ? "Без мережі нотаток не показати." : `${SPIN}Завантажуємо…`}</p></div></section>`;
     const ts = topics();
     const ls = loose();
@@ -344,7 +344,7 @@
     const at = new Date(it.at);
     const time = at.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
     const said = [it.text ? `«${esc(it.text)}»` : "", `${when(it.at)}${when(it.at) ? ", " : ""}${time}`, it.voice ? "голосом" : ""].filter(Boolean).join(" · ");
-    let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Нотатки</button>
+    let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Мої нотатки</button>
       <p class="r-scr-said">${said}</p>
       ${it.photo ? `<img class="r-scr-photo" src="/api/scratch/${it.id}/photo" alt="Фото до запису">` : ""}`;
     const a = it.ai;
@@ -406,8 +406,8 @@
   // One book's notes and explanations, as the book's own «Нотатки» lists them, by chapter, newest first.
   function bookHtml() {
     const b = libBook(book);
-    const back = from && byId(from) ? `‹ ${esc(title(byId(from)))}` : "‹ Нотатки";
-    if (!b) return `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Нотатки</button><p class="r-empty">Цієї книжки вже немає серед ваших.</p></section>`;
+    const back = from && byId(from) ? `‹ ${esc(title(byId(from)))}` : "‹ Мої нотатки";
+    if (!b) return `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Мої нотатки</button><p class="r-empty">Цієї книжки вже немає серед ваших.</p></section>`;
     const ts = topicsOf(book);
     let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">${back}</button>
       <div class="nx-bookhead">${window.Shell.rcover(b)}<span><b>${esc(b.title)}</b><span class="nx-bm">${esc([author(b), STATE[state(b)]].filter(Boolean).join(" · "))}</span>

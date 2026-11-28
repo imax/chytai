@@ -16,6 +16,7 @@ const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
 const libraries = require("./libraries");
+const places = require("./places");
 const wikidata = require("./wikidata");
 const authors = require("./authors");
 const { Social, tagsOf } = require("./social");
@@ -1249,9 +1250,12 @@ app.post("/api/reader-want", (req, res) => {
     return edsKept.get(book.id);
   };
   // «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): every shop that has the book in stock
-  // now, by its name: [price, url, format], paper before an e-book or audio, then the cheapest. The reader keeps which
+  // now, by its name: [price, url, format, codes, label], paper before an e-book or audio, then the cheapest; with the
+  // reader's «Формати» (places.js) a row in one of them before the rest. `codes` (paper, epub, pdf, kindle, audio, app)
+  // and `label` («EPUB, PDF», «лише Kindle», «у застосунку») say what the row is. The reader keeps which
   // shops one picked (settings `shops`) and picks from these itself; `shops` in the answer = each name's kind and formats.
   const shopKinds = {};
+  const fmts = () => placesOut.formats || [];
   const stockOf = (book) => {
     const out = {};
     for (const e of edsOf(book)) {
@@ -1261,7 +1265,9 @@ app.post("/api/reader-want", (req, res) => {
       if (!k.formats.includes(kindOf(e))) k.formats.push(kindOf(e));
       const was = out[name];
       const paper = kindOf(e) === "папір";
-      if (!was || (paper && was[2] !== "папір") || (paper === (was[2] === "папір") && price(e) < (was[0] || Infinity))) out[name] = [Number.isFinite(price(e)) ? price(e) : 0, e.links[0].url, kindOf(e)];
+      const fit = places.fits(e, fmts()) ? 1 : 0;
+      const wasFit = was ? (fmts().length ? (was[3].some((c) => fmts().includes(c)) ? 1 : 0) : 1) : 0;
+      if (!was || fit > wasFit || (fit === wasFit && ((paper && was[2] !== "папір") || (paper === (was[2] === "папір") && price(e) < (was[0] || Infinity))))) out[name] = [Number.isFinite(price(e)) ? price(e) : 0, e.links[0].url, kindOf(e), places.codes(e), places.label(e)];
     }
     return out;
   };
@@ -1274,7 +1280,7 @@ app.post("/api/reader-want", (req, res) => {
       // The publisher's own shop first when it has the book (Max 2026-11-26, «Завжди першим»), as on the book page.
       for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.own && a.status === "є" ? 0 : 1) - (b.own && b.status === "є" ? 0 : 1) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
         if (shops.length >= 2 || shops.some((s) => s.shop === e.shelf.name)) continue;
-        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", pages.avail(e)].filter(Boolean).join(", ") });
+        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, fmt: places.label(e), codes: places.codes(e), note: [e.subscription ? "є в підписці" : "", pages.avail(e)].filter(Boolean).join(", ") });
       }
       if (shops.length) get.push({ kind, shops });
     }
@@ -1308,10 +1314,12 @@ app.post("/api/reader-want", (req, res) => {
   // «Бібліотеки» (Max 2026-11-25): the branches the reader picked in the reader ({lib, branch}, 5 at most); each book
   // says which of them hold it, from the cache only (libraries.picked), and the books not asked yet are asked in the
   // background within the library's budget (libraries.fill), so the page that asks again a little later sees more.
-  const picks = (Array.isArray(req.body?.libs) ? req.body.libs : [])
-    .filter((p) => libraries.LIBRARIES.some((l) => l.id === p?.lib && !l.draft) && typeof p.branch === "string")
-    .slice(0, 5)
-    .map((p) => ({ lib: p.lib, branch: libraries.place(p.branch.slice(0, 200)) }));
+  // The choice is the site's now (places.js, Max 2026-11-28: one for the site and the reader): the reader sends its own
+  // copy (`shops`, `libs`) with the time it was changed there (`placesAt`); the newer wins and comes back as `places`.
+  // The mentions' card (`hrefs`) sends none and takes the site's.
+  const mineNow = Array.isArray(req.body?.shops) || Array.isArray(req.body?.libs) ? places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, formats: req.body.formats, at: req.body.placesAt }) : places.get(store.db, id);
+  const placesOut = mineNow || { shops: [], libs: [], formats: [], at: 0 };
+  const picks = hrefs ? [] : placesOut.libs;
   const libBook = new Map(picks.length ? rows.map((r) => [r.id, store.book(store.resolve(r.id) || r.id)]).filter(([, b]) => b) : []);
   const books = rows.map((r) => {
     const book = store.bookPage(r.id) || r.book;
@@ -1337,10 +1345,18 @@ app.post("/api/reader-want", (req, res) => {
     const lib = libBook.has(r.id) ? libraries.picked(store.db, libBook.get(r.id), picks) : [];
     return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: readerCover(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), stock: stockOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
   });
-  if (!picks.length) return res.json({ books, shops: shopKinds });
+  if (!picks.length) return res.json({ books, shops: shopKinds, places: placesOut });
   const list = [...libBook.values()];
   libraries.fill(store.db, list, picks, { log: console.log });
-  res.json({ books, shops: shopKinds, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
+  res.json({ books, shops: shopKinds, places: placesOut, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
+});
+
+// The reader's own shops and branches changed in the reader (want.js's dialog): kept here when newer than ours
+// (places.js), the site's «Де взяти» follows at once. Signed with the account's key.
+app.post("/api/reader-places", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  res.json({ places: places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, formats: req.body.formats, at: Number(req.body.at) || Date.now() }) });
 });
 
 // «Хочу прочитати» on a mentioned book's card in the reader (Max 2026-11-26, «Згадані книжки»): the book by its page
@@ -1628,6 +1644,19 @@ app.post("/settings", signed, (req, res) => {
   res.redirect("/settings?saved=1");
 });
 // The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
+// «Мої книгарні й бібліотеки» (places.js; Max 2026-11-28: «налаштування — окремий екран»): the reader's own shops and
+// library branches, first in «Де взяти» and in the reader's «Хочу прочитати». `back` = the book page «змінити» came from.
+const localBack = (v) => (/^\/(?!\/)[^\s]*$/.test(String(v || "")) ? String(v) : "");
+app.get("/settings/places", signed, (req, res) => {
+  res.send(pages.placesSettingsPage({ user: req.user, values: places.get(store.db, req.user.id) || { shops: [], libs: [], formats: [] }, formats: places.FORMATS, choices: places.choices(store), libs: libraries.branchList(store.db), saved: !!req.query.saved, back: localBack(req.query.back) }));
+});
+app.post("/settings/places", signed, (req, res) => {
+  const many = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]).map(String);
+  const libs = many(req.body.lib).map((v) => ({ lib: v.split("|")[0], branch: v.split("|").slice(1).join("|") }));
+  places.set(store.db, req.user.id, { shops: many(req.body.shop), libs, formats: many(req.body.format) });
+  const back = localBack(req.body.back);
+  res.redirect(back || "/settings/places?saved=1");
+});
 app.get("/settings/mail", signed, (req, res) => {
   res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved, calSubs: calendar.subs(req.user.id).map((f) => ({ name: subName(f), href: calHref(f) })) }));
 });
@@ -1663,6 +1692,7 @@ app.post("/settings/delete", signed, (req, res) => {
   lists.forgetReader(req.user.id);
   club.forgetReader(req.user.id);
   mcp.forgetReader(req.user.id);
+  places.remove(store.db, req.user.id);
   readerSignOut(req.user.id);
   auth.deleteReader(req.user.id);
   store.forgetReader(req.user.id);
@@ -2759,6 +2789,36 @@ app.get("/want-mail/preview", owner, (req, res) => {
   res.type("text").send(l ? `Тема: ${l.subject}\n\n${l.text}` : `Для @${reader.username} зараз нічого нового (або ще не було першої перевірки).\nОстанній запуск: ${store.db.get("wantmail:last") || "ще не було"}`);
 });
 
+// «Є у ваших» on one's own «Хочу прочитати» (places.js, Max 2026-11-28): each wanted book that one's own shop has in
+// stock now or one's own branch holds (the libraries' cache only; the books not asked yet are asked in the background,
+// as for the reader), as one line: row id -> { shops: [{name, price, url}], libs: [{branch, state, url}] }.
+function yoursOf(readerId, rows) {
+  const pl = places.get(store.db, readerId);
+  if (!pl || (!pl.shops.length && !pl.libs.length && !pl.formats.length)) return null;
+  const out = new Map();
+  const libBooks = [];
+  const price = (e) => Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity;
+  for (const r of rows) {
+    if (r.status !== "want" || r.kids) continue;
+    const shops = [];
+    // «Формати» alone = any shop with the book in one of them (Max 2026-11-28, variant Б).
+    if (pl.shops.length || pl.formats.length) {
+      const b = store.bookPage(r.id);
+      const w = b && withShops(b);
+      const eds = w ? w.shops || w.editions || [] : [];
+      for (const e of eds.filter((e) => e.status === "є" && !e.adapted && e.links?.[0]?.url && (!pl.shops.length || pl.shops.includes(e.shelf?.name)) && places.fits(e, pl.formats)).sort((a, b) => price(a) - price(b)))
+        if (!shops.some((x) => x.name === e.shelf.name)) shops.push({ name: e.shelf.name, price: e.price || "", url: e.links[0].url });
+    }
+    let libs = [];
+    if (pl.libs.length) {
+      const lb = store.book(store.resolve(r.id) || r.id);
+      if (lb) libBooks.push(lb), (libs = libraries.picked(store.db, lb, pl.libs).filter((l) => l.state !== "out"));
+    }
+    if (shops.length || libs.length) out.set(r.id, { shops, libs });
+  }
+  if (libBooks.length) libraries.fill(store.db, libBooks, pl.libs, { log: console.log });
+  return out;
+}
 function libraryRows(reader) {
   const rows = store.library(reader);
   let prev;
@@ -2788,7 +2848,7 @@ app.get("/@:username", (req, res) => {
   const part = restPart(req, res);
   const favN = own && !part ? lists.favOffer(reader.id) : 0;
   const favOffer = favN ? { n: favN, books: fanBooks(lists.favBooks(reader.id).map((id) => ({ id, book: store.book(id) })), 4) } : null;
-  if (own) return res.send(pages.libraryPage({ part, favOffer, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  if (own) return res.send(pages.libraryPage({ yours: yoursOf(reader.id, rows), part, favOffer, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   // Others don't see the parts of notes written in Russian (store.publicNote, Max 2026-11-23).
   const shown = rows.map((r) => (r.note && publicNote(r.note) !== r.note ? { ...r, note: publicNote(r.note) } : r));
   res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows: shown, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
@@ -4200,7 +4260,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, bookflow: bookflow.linkFor(book),...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book), event: bookEvent(book) }));
+  res.send(pages.bookPage({ places: req.user ? places.get(store.db, req.user.id) || { shops: [], libs: [] } : null, ukrlib: openLinks.linkFor(store, book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, bookflow: bookflow.linkFor(book),...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book), event: bookEvent(book) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
@@ -4348,7 +4408,11 @@ app.get("/api/libraries/:id", async (req, res) => {
   const id = store.resolve(req.params.id);
   const book = id && bookFor(req, store.book(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).json([]);
-  res.json(await libraries.holdings(store.db, book, { includeDraft: req.owner, log: console.log }));
+  const list = await libraries.holdings(store.db, book, { includeDraft: req.owner, log: console.log });
+  // The reader's own branches (places.js) carry `mine`: app.js shows them first when they hold the book.
+  const mine = places.get(store.db, req.user?.id)?.libs || [];
+  if (!mine.length) return res.json(list);
+  res.json(list.map((l) => ({ ...l, records: l.records.map((r) => ({ ...r, branches: r.branches.map((b) => (mine.some((p) => p.lib === l.id && p.branch === libraries.place(b.branch)) ? { ...b, mine: true } : b)) })) })));
 });
 
 // ---- writes (signed-in readers; the catalog refresh is the owner's) ----
