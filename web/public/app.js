@@ -106,6 +106,7 @@
       const p = filters.pick; // a shelf's quick picks (pages.libraryPage)
       if (p === "top" && !(Number(it.dataset.rating) >= 4.5)) return false;
       if (p === "uk" && it.dataset.uk !== "1") return false;
+      if (p === "yours" && it.dataset.yours !== "1") return false;
       if (p?.startsWith("f:") && !(it.dataset.fam || "").split("|").includes(p.slice(2))) return false;
       return true;
     }
@@ -271,13 +272,76 @@
           return `<span><a href="${esc(l.records[0].url)}" target="_blank" rel="noopener">${esc(l.name)}</a>: ${parts.length ? parts.join(" · ") : `<span class="muted">усі примірники видані</span>`}</span>`;
         };
         libs.sort((a, b) => b.on.length - a.on.length);
-        where.insertAdjacentHTML(
-          "beforeend",
-          `<div class="where-row"><span class="where-kind">Бібліотеки</span><span class="where-what">${libs.map(city).join(` <span class="muted">·</span> `)} <details class="where-more"><summary>які</summary>${libs.map(detail).join("")}</details></span></div>`
-        );
+        const all = `<div class="where-row"><span class="where-kind">Бібліотеки</span><span class="where-what">${libs.map(city).join(` <span class="muted">·</span> `)} <details class="where-more"><summary>які</summary>${libs.map(detail).join("")}</details></span></div>`;
+        // The reader's own branches (`mine`, places.js) that hold it: one bold row on top, the rest folds under «Ще де
+        // взяти» with the shops (Max 2026-11-28, variant C); every copy lent out is not «є».
+        const mine = [];
+        for (const l of list) for (const r of l.records) for (const b of r.branches) {
+          if (!b.mine || !(b.onShelf || b.unknown) || mine.some((m) => m.name === b.branch)) continue;
+          mine.push({ name: b.branch, url: r.url, on: b.onShelf > 0 });
+        }
+        mine.sort((a, b) => b.on - a.on);
+        const foot = $(".where-foot", where);
+        let rest = $(".where-rest", where);
+        if (mine.length) {
+          let box = $(".where-mine", where);
+          if (!box) {
+            // No shop of theirs had it: the rows the page came with fold now (below).
+            $(".where-label", where).insertAdjacentHTML("afterend", `<div class="where-mine"></div>`);
+            box = $(".where-mine", where);
+          }
+          if (!rest) {
+            box.insertAdjacentHTML("afterend", `<details class="where-rest"><summary>Ще де взяти: <span class="where-names"></span></summary></details>`);
+            rest = $(".where-rest", where);
+            const names = [];
+            for (const row of $$(":scope > .where-row", where)) {
+              for (const a of $$(".where-what > a:not(.muted)", row)) if (!names.includes(a.textContent)) names.push(a.textContent);
+              rest.append(row);
+            }
+            $(".where-names", rest).textContent = names.length > 3 ? `${names.slice(0, 3).join(", ")} і ще ${names.length - 3}` : names.join(", ");
+          }
+          const short = (s) => ((t) => t.charAt(0).toUpperCase() + t.slice(1))(s.replace(/^бібліотека\s+/i, ""));
+          box.insertAdjacentHTML("beforeend", `<div class="where-row"><span class="where-kind">Бібліотеки</span><span class="where-what">${mine.map((m) => `<b><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(short(m.name))}</a></b><span class="${m.on ? "ok" : "muted"}">, ${m.on ? "на полиці" : "є"}</span>`).join(` <span class="muted">·</span> `)}</span></div>`);
+          rest.insertAdjacentHTML("beforeend", all);
+          const n = $(".where-names", rest);
+          n.textContent = n.textContent ? `${n.textContent}, бібліотеки` : "бібліотеки";
+        } else if (rest) {
+          rest.insertAdjacentHTML("beforeend", all);
+          const n = $(".where-names", rest);
+          n.textContent = n.textContent ? `${n.textContent}, бібліотеки` : "бібліотеки";
+        } else if (foot) foot.insertAdjacentHTML("beforebegin", all);
+        else where.insertAdjacentHTML("beforeend", all);
         where.classList.remove("hidden");
       })
       .catch(() => {});
+  }
+
+  // /settings/places: 5 shops and 5 branches at most; the search shows the branches whose name has the words.
+  const placesForm = $(".places-form");
+  if (placesForm) {
+    const note = $(".places-note", placesForm);
+    placesForm.addEventListener("change", (e) => {
+      const name = e.target.name;
+      if (!e.target.checked || !["shop", "lib"].includes(name)) return;
+      const over = $$(`input[name="${name}"]:checked`, placesForm).length > 5;
+      if (over) e.target.checked = false;
+      note.hidden = !over;
+    });
+    const q = $(".lib-q", placesForm);
+    q?.addEventListener("input", () => {
+      const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+      for (const city of $$(".city", placesForm)) {
+        if (!$("input[name=lib]", city)) continue;
+        let any = false;
+        for (const l of $$("label", city)) {
+          const hit = words.every((w) => l.textContent.toLowerCase().includes(w));
+          l.hidden = !hit;
+          any ||= hit;
+        }
+        city.hidden = words.length > 0 && !any;
+        if (words.length && any) city.open = true;
+      }
+    });
   }
 
   // Dialogs: delegated, since search results (with «Додати книжку») arrive after the page loads.

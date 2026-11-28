@@ -366,6 +366,20 @@ body.asking .ask-link .when-idle { display: none; }
 .where-more[open] summary { display: none; }
 .where-more > span { display: block; }
 .where .ok { color: var(--accent); }
+/* «Мої книгарні й бібліотеки» (variant C): the reader's own on top, the rest folded under «Ще де взяти». */
+.where-mine, .where-rest { display: grid; gap: 6px; }
+.where-mine b a { color: var(--ink); }
+.where-rest > summary { cursor: pointer; color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; list-style: none; }
+.where-rest > summary::-webkit-details-marker { display: none; }
+.where-rest[open] > summary { display: none; }
+.where-foot { margin: 4px 0 0; }
+.places-form h3 { margin: 18px 0 6px; font-size: 15px; }
+.places-form [hidden] { display: none !important; }
+.places-form .city > summary { cursor: pointer; padding: 6px 0; }
+.places-form .city[open] > summary { font-weight: 600; }
+.places-form .lib-list { max-height: 360px; overflow-y: auto; }
+.row .yours { margin: 6px 0 0; }
+.row .yours b a { color: var(--ink); text-decoration: none; }
 .big-quote { font: 28px/1.3 var(--serif); }
 .big-quote.long { font-size: 21px; line-height: 1.45; }
 .big-quote p + p { margin-top: 0.6em; }

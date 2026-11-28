@@ -1003,6 +1003,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   Book.ua, Абук, publishers' own shops), and `shops` = {name: {kind, formats}}; the page picks the reader's itself
   (no extra call). Tile = the lowest price in a picked shop (+ its name when 2+ picked); the card puts those shops
   first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
+- «Мої книгарні й бібліотеки» on the site too (Max 2026-11-28, variant C of canvas UfKURsapQDWb2P1VA9XtD5; `web/places.js`):
+  one choice for the site and the reader, kept on the site (table `reader_places`: shops by name ≤5, branches {lib,
+  branch} ≤5, `at`). Set on /settings/places (tab «Книгарні й бібліотеки»; `back` = the book page «змінити» came from)
+  or in the reader's dialog: the reader's PATCH /settings sends it to `POST /api/reader-places` with `placesAt`, and
+  `/api/want` sends its copy to `/api/reader-want`, which answers `places`; the newer wins (`places.sync`), a reader's
+  old picks came over on its first ask. «Де взяти» (pages.js `where(…, places)`): when one's own shop has the book in
+  stock only those rows show, bold (`.where-mine`), the rest under «Ще де взяти» (`.where-rest`); `/api/libraries/:id`
+  marks one's own branches `mine` and app.js adds them on top (folding the rows then if no shop of theirs had it);
+  none of theirs = as before. Under it «Ваші: … · змінити» or «Оберіть свої…». One's own shelf: chip «Є у ваших · N»
+  (`yoursOf` in server.js, want rows only, libraries from the cache + `libraries.fill`).
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone), and only when the reader
