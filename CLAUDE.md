@@ -8,6 +8,9 @@ The repo is public: never commit secrets, keys or `data/`.
 Keep this file up to date (Max, 2026-11-09): when you add a way of working, a tool, an endpoint or a rule that the
 next thread should know, change this file in the same commit. Short recipes, not history.
 
+Reader design (Max 2026-11-28): read `docs/reader-design.md` before you change how the reader looks or what it says
+(colours, fonts, buttons, pages, dialogs, copy, names). A new design rule or name from Max goes there in the same commit.
+
 ## Ship
 
 - Push straight to `main`, no pull requests. `web.yml` deploys `web/**` to chytai-web, `deploy.yml` the reader's own
