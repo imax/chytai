@@ -908,7 +908,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
-- Reader «Нотатки» (Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
+- Reader «Мої нотатки» (named so 2026-11-28, design review: the book's own sheet is «Нотатки», this page all of them; Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
   a research folder, on the server so phone and computer show the same (Max: «як obsidian/notion в плані кросс-девайсу»).
   Panel after «Хочу прочитати» (`r-pnav-scratch`, page `scratch`, `src/renderer/scratch.js`). Topics are listed by the last change
   (`updated`: `touched`, thoughts, books added; newest on top, Max 2026-11-26). The in-book «Нотатки»
