@@ -905,11 +905,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   API key field) were taken out of the page on 2026-11-18; library-view.js keeps only the list, adding books
   (`Library.add`) and «Назва, автор, обкладинка». Their server routes (`/api/wish`, `/api/club`, `/api/notes/all`) stay.
 - Reader layout (Max 2026-11-28, variant А of canvas TARbK7M8QksAaL45wez6iP; docs/reader-design.md §4): a phone has four
-  tabs at the bottom (`#r-tabs`, ids `r-tab-*`: «Читаю · Хочу · Полиці · Нотатки» = pages home / want / shelves /
+  tabs at the bottom (`#r-tabs`, ids `r-tab-*`: «Мої книжки · Хочу · Полиці · Нотатки» = pages home / want / shelves /
   scratch), only on those pages. The header: search (`data-act="psearch"`: `#r-panel` over the whole page, on a phone only
   the search), «+» (`#add-sheet`) and the avatar (`#me-sheet`: Статистика, Налаштування, Кошик, Адмінка); home.js copies
   the home header's `.r-hact` into `.r-head-w/-s/-p`. A topic or a shelf (`#shell.scr-deep` / `.sh-deep`, scratch.js /
-  shelves.js) has «‹» and no actions. A book's edge swipe and Android's back go to «Читаю» (`panelFromBook`), no drawer.
+  shelves.js) has «‹» and no actions. A book's edge swipe and Android's back go to «Мої книжки» (`panelFromBook`), no drawer.
   A computer keeps the panel: «Додати книжку» a button (`.r-padd`), «Адмінка» at its foot, no «Нещодавно відкриті».
   A new page: a panel row and a `#me-sheet` row; a fifth tab only by Max.
 - Reader «Статистика» (Max 2026-11-19; not «Мій шлях», «пафосно»): panel item (`r-pnav-journey`, page `journey` in

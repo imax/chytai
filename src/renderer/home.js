@@ -180,7 +180,7 @@
   // In an e-book (phone app) a swipe from the left edge opens the panel too, as on a paper book (Max 2026-11-05):
   // your books show behind it, as on a paper book. Putting the panel away leaves you on your books: going back to
   // the book there made a tap on another cover behind the panel reopen the same book (Max 2026-11-05).
-  // With the tabs (variant А, Max 2026-11-28) that swipe and Android's back bring «Читаю» with the tabs; the panel is
+  // With the tabs (variant А, Max 2026-11-28) that swipe and Android's back bring «Мої книжки» with the tabs; the panel is
   // only search on a phone.
   function panelFromBook() {
     if (!phone() || isOpen() || settings.guest) return;
