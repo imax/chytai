@@ -450,6 +450,8 @@
 
   function html() {
     watch();
+    // A topic or a book: the phone's header has «‹» and no search, «+» or avatar (variant А, style.css).
+    $("#shell").classList.toggle("scr-deep", !!(book || mview || open));
     if (book) return bookHtml();
     if (mview) return mentionsHtml();
     const it = open && byId(open);
