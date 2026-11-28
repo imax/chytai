@@ -228,6 +228,32 @@ window.Mentions = (() => {
   }
 
   // ---------- the card ----------
+  // «Хочу прочитати»: the site's want shelf; a book the catalog lacks is looked for first (`data-mn-new`).
+  function wantHtml(cat, b) {
+    const st = b?.status || "";
+    return !cat?.href
+      ? `<button type="button" class="r-pill pf-add" data-mn-new data-act="mention-want-new">Хочу прочитати</button>`
+      : st === "want"
+        ? `<p class="mn-on">✓ У «Хочу прочитати»</p>`
+        : st
+          ? `<p class="mn-on">✓ На вашій полиці</p>`
+          : `<button type="button" class="r-pill pf-add" data-mn-want="${esc(cat.href)}" data-act="mention-want">Хочу прочитати</button>`;
+  }
+  // The same button on another Paper.card (a topic's book in «Нотатки», Max 2026-11-28): drawn into its `#mn-want`
+  // once the site says where the book is.
+  async function want(book, { line = false } = {}) {
+    const d = card();
+    if (guest() || !d) return;
+    const m = { title: book.title, author: book.author || "", orig: book.orig || "", href: book.href || "" };
+    d.mention = m; // `data-mn-new` reads it; a late answer for another card draws nothing
+    let data = null;
+    try {
+      data = await window.reader.mentionCard(m);
+    } catch {}
+    const slot = d.querySelector("#mn-want");
+    if (!data || !d.open || d.mention !== m || !slot) return;
+    slot.innerHTML = wantHtml(data.cat, data.book).replace('class="r-pill pf-add"', `class="${line ? "r-pill-line" : "r-pill"} pf-add"`);
+  }
   // m: { title, author, orig, cat? (the catalog's book, when known), id + src (the list's entry and its book) }.
   async function open(m, from) {
     const d = document.querySelector("#paper-found");
@@ -241,16 +267,7 @@ window.Mentions = (() => {
       // «Немає на Chytai» under «Про книжку», not above it (Max 2026-11-26, bot №66).
       const none = data && !cat && !b ? `<p class="r-want-none mn-none">Цієї книжки немає на Chytai.</p>` : "";
       // No «Де взяти» here (Max 2026-11-27, bot №89: a mentioned book's card is not a shop; «Хочу прочитати» has it).
-      const st = b?.status || "";
-      const want = guest() || !data
-        ? ""
-        : !cat?.href
-          ? `<button type="button" class="r-pill pf-add" data-mn-new data-act="mention-want-new">Хочу прочитати</button>`
-        : st === "want"
-          ? `<p class="mn-on">✓ У «Хочу прочитати»</p>`
-          : st
-            ? `<p class="mn-on">✓ На вашій полиці</p>`
-            : `<button type="button" class="r-pill pf-add" data-mn-want="${esc(cat.href)}" data-act="mention-want">Хочу прочитати</button>`;
+      const want = guest() || !data ? "" : wantHtml(cat, b);
       const page = cat?.href ? `<p class="pf-page"><a href="${esc(cat.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : "";
       const drop = m.id && m.src ? `<p class="mn-dropp"><button type="button" class="r-link mn-drop" data-mn-drop data-act="mention-drop">Прибрати зі згаданих</button></p>` : "";
       d.mention = m;
@@ -461,5 +478,5 @@ window.Mentions = (() => {
     lit = null;
   }
 
-  return { load, loadPaper, prep, post, plain, mark, remark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, open, has: () => textOk(book) };
+  return { load, loadPaper, prep, post, plain, mark, remark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, open, want, has: () => textOk(book) };
 })();

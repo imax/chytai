@@ -3636,8 +3636,10 @@ api.get("/mentions/card", async (req, res) => {
   const author = clean(req.query.author, 120);
   if (!title) return res.status(400).json({ error: "title" });
   let cat = null;
+  // `href`: a book whose catalog page is known already (a topic's book in «Нотатки»): only its shelf state.
+  const href = clean(req.query.href, 500);
   try {
-    cat = await mentions.match(title, author, clean(req.query.orig, 200));
+    cat = href ? { href } : await mentions.match(title, author, clean(req.query.orig, 200));
   } catch {}
   if (!cat?.href || req.guest || !state.accounts[req.acct]?.key) return res.json({ cat, book: null });
   try {

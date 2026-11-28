@@ -661,7 +661,9 @@
       const acts = b.wanted
         ? `<button type="button" class="r-link nx-drop" data-nx-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`
         : `<span class="nx-acts3"><button type="button" class="r-pill" data-nx-act="scr-add" data-scr-ai="${i}">Додати в тему</button><button type="button" class="r-link nx-no" data-nx-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>`;
-      return topicCard({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year }, whyOf(b) ? `<p class="nx-cwhy">${esc(whyOf(b))}</p>` : "", acts);
+      // A book in the topic: «Хочу прочитати» is the card's button; a suggestion keeps «Додати в тему» first.
+      topicCard({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year }, whyOf(b) ? `<p class="nx-cwhy">${esc(whyOf(b))}</p>` : "", acts, b.wanted ? "top" : "end");
+      return window.Mentions?.want({ title: bookTitle(b), author: bookAuthor(b), orig: b.title !== bookTitle(b) ? b.title : "", href: b.href || "" }, { line: !b.wanted });
     }
     try {
       if (name === "scr-link") {
@@ -698,10 +700,12 @@
   const shell = $("#shell");
   // Before home.js: the header's «назад» on a topic or a book goes back here, not home.
   // A topic's book card (Max 2026-11-25, «Картка теми»): why it is here, «Про книжку» / «Чому варто читати» (paper.js),
-  // the topic's own buttons and the book's page here; no «Додати в мої книжки» (reading has its own pages).
-  function topicCard(b, top, acts) {
+  // the topic's own buttons, «Хочу прочитати» (Max 2026-11-28, the site's shelf, as on a mentioned book's card:
+  // `want` = a slot mentions.js fills) and the book's page here; no «Додати в мої книжки».
+  function topicCard(b, top, acts, want = "") {
     const page = b.href ? `<p class="pf-page"><a href="${esc(b.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : "";
-    window.Paper.card(b, { top, noAdd: true, foot: `${acts ? `<div class="nx-cacts">${acts}</div>` : ""}${page}` });
+    const slot = want ? `<div id="mn-want" class="nx-want-${want}"></div>` : "";
+    window.Paper.card(b, { top, noAdd: true, foot: `${want === "top" ? slot : ""}${acts ? `<div class="nx-cacts">${acts}</div>` : ""}${want === "end" ? slot : ""}${page}` });
   }
   document.addEventListener("click", (e) => {
     const el = e.target.closest("#paper-found [data-nx-act]");
