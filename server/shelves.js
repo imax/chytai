@@ -1,7 +1,7 @@
 // «Полиці» (Max 2026-11-27, variant A of canvas H7RtPE5ytNgCN2uEt22xD7): paper books that stand somewhere, at home,
 // in an office, at a friend's. A reader makes a shelf from photos of it (Sonnet reads the spines) or a pasted list
 // (Haiku parses it), each title found in the catalog; then shares it by a link (/p/<key>). Another reader who opens
-// the link adds the shelf («Додати собі») and sees in «Хочу прочитати» which wanted books stand on it («Полиці
+// the link adds the shelf («Стежити») and sees in «Хочу прочитати» which wanted books stand on it («Полиці
 // друзів»). They talk outside the app: no messages here, no contacts shown. A shelf is seen only by its link; its
 // owner sees who added it and can take a reader off or make a new link (the old one stops working).
 // Kept per account in accounts/<id>/shelves.json: { mine: [{ id, name, key, books: [{ t, a, h, c }], seen: { acct:

@@ -2,7 +2,7 @@
 // at a friend's. A page in the panel after «Хочу прочитати» (home.js page «shelves»): one's own shelves and friends'
 // ones. A new shelf comes from photos of its spines (Sonnet reads them) or a pasted list (Haiku), each book found in
 // the catalog; the reader takes off what is wrong and saves it. «Поділитися» gives a link (/p/<key> → /?shelf=<key>);
-// a friend who opens it presses «Додати собі», and «Хочу прочитати» shows which wanted books stand on it («Полиці
+// a friend who opens it presses «Стежити», and «Хочу прочитати» shows which wanted books stand on it («Полиці
 // друзів», want.js; the card's «У друзів»). They talk outside the app: no messages, no contacts here.
 // Server: server/shelves.js and /api/shelves* in server/index.js. Taps count by data-act (reading-time.js): act-shelf-*.
 (() => {
@@ -94,8 +94,8 @@
     const acts = mine
       ? `<p class="sh-tools"><button type="button" class="r-pill-line sh-add" data-sh="more" data-act="shelf-more">+ Додати книжки</button><button type="button" class="sh-tool" data-sh="share" data-act="shelf-share">${SHARE}Поділитися</button></p>`
       : cur.kind === "link" && !cur.on
-        ? `<p class="sh-acts"><button type="button" class="r-pill" data-sh="follow" data-act="shelf-follow">Додати собі</button></p><p class="r-want-p">Полиця буде у ваших «Полицях», а її книжки в «Хочу прочитати».</p>`
-        : `<p class="sh-acts"><span class="sh-on">✓ У ваших полицях</span><button type="button" class="r-link" data-sh="unfollow" data-act="shelf-unfollow">Прибрати</button></p>`;
+        ? `<p class="sh-acts"><button type="button" class="r-pill" data-sh="follow" data-act="shelf-follow">Стежити</button></p><p class="r-want-p">Полиця буде у ваших «Полицях», а її книжки в «Хочу прочитати».</p>`
+        : `<p class="sh-acts"><button type="button" class="r-pill-line" data-sh="unfollow" data-act="shelf-unfollow" title="Більше не стежити">✓ Стежу</button></p>`;
     const search = cur.books.length > 12 ? `<label class="r-search sh-search">${LOUPE}<input class="sh-q" type="search" placeholder="Шукати на полиці" autocomplete="off" enterkeyhint="search" value="${esc(q)}" /></label>` : "";
     const pen = mine ? pencil() : "";
     const empty = !cur.books.length ? `<p class="r-want-p">Поки порожньо.</p>` : "";
@@ -294,7 +294,7 @@
 
   async function shareSheet(fresh = false) {
     const s = cur;
-    sheet("Поділитися полицею", "Хто має посилання, бачить книжки цієї полиці й може додати її собі.", `<p class="lb-note">${SPIN}</p>`);
+    sheet("Поділитися полицею", "Хто має посилання, бачить книжки цієї полиці й може стежити за нею.", `<p class="lb-note">${SPIN}</p>`);
     let link = "";
     try {
       link = (await window.reader.shelfShare(s.id, fresh)).link;
@@ -303,7 +303,7 @@
     }
     s.link = link;
     const who = s.seen?.length
-      ? `<p class="lb-note sh-sh">Додали собі:</p><ul class="lb-list sh-who">${s.seen.map((p) => `<li><label>${esc(p.name)}${p.username ? ` <small>@${esc(p.username)}</small>` : ""}<button type="button" class="r-link" data-sh-kick="${esc(p.id)}" data-act="shelf-kick">Прибрати</button></label></li>`).join("")}</ul>`
+      ? `<p class="lb-note sh-sh">Стежать:</p><ul class="lb-list sh-who">${s.seen.map((p) => `<li><label>${esc(p.name)}${p.username ? ` <small>@${esc(p.username)}</small>` : ""}<button type="button" class="r-link" data-sh-kick="${esc(p.id)}" data-act="shelf-kick">Прибрати</button></label></li>`).join("")}</ul>`
       : `<p class="lb-note sh-sh">Поки ніхто не додав.</p>`;
     dlg().querySelector("#sd-body").innerHTML = `<div class="sh-link"><input class="lb-q" readonly value="${esc(link)}" /><button type="button" class="r-pill" data-sh="copy" data-act="shelf-copy">Копіювати</button></div>
       ${who}<p class="lb-note"><button type="button" class="r-link" data-sh="fresh" data-act="shelf-fresh">Нове посилання</button> · старе перестане працювати</p>`;
@@ -474,7 +474,7 @@
     redraw();
   });
 
-  // A shelf's link (/p/<key> → /?shelf=<key>): its page, with «Додати собі».
+  // A shelf's link (/p/<key> → /?shelf=<key>): its page, with «Стежити».
   const key = new URLSearchParams(location.search).get("shelf");
   if (key) {
     history.replaceState(history.state, "", "/");

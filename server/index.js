@@ -2108,7 +2108,7 @@ api.get("/want/shelf", guestsCannot("Без входу списку немає."
 // shelves of paper books (home, office, a friend's) made from photos or a pasted list, shared by a link /p/<key>; the
 // shelves a reader added show in «Хочу прочитати» («Полиці друзів»). Photos: Sonnet, SHELF_PHOTOS_ACCOUNT a reader a
 // day, SHELF_PHOTOS_DAY for all (Telegram once), Max none; a list: Haiku, SHELF_LISTS_ACCOUNT a day. Stats day
-// `shelves` { photos, lists, cost, accts }. A shelf's first books and every «Додати собі» mail + Telegram Max.
+// `shelves` { photos, lists, cost, accts }. A shelf's first books and every «Стежити» mail + Telegram Max.
 const SHELF_PHOTOS_ACCOUNT = 30;
 const SHELF_PHOTOS_DAY = 300;
 const SHELF_LISTS_ACCOUNT = 20;
@@ -2120,7 +2120,9 @@ const shelfDay = () => {
 };
 const noShelves = guestsCannot("Без входу полиць немає.");
 const shelfWho = (acct) => `${accountName(acct)}${state.accounts[acct]?.username ? ` (https://chytai.org.ua/@${state.accounts[acct].username})` : ""}`;
-const shelfUrl = (req, key) => `${req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.get("host")}/p/${key}`;
+// Links a reader passes on name the public address (the app itself runs on chytai.fly.dev).
+const publicOrigin = (req) => (READER_DOMAIN ? `https://${READER_DOMAIN}` : `${req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.get("host")}`);
+const shelfUrl = (req, key) => `${publicOrigin(req)}/p/${key}`;
 const shelfBooks = (s) => s.books.map((b) => ({ t: b.t, a: b.a, h: b.h, c: b.c }));
 const shelfFail = (res, err) => res.status(err.status || 500).json({ error: err.status ? err.message : "Не вийшло." });
 // The list: one's own shelves and the friends' ones, each with three covers for the row.
@@ -2186,7 +2188,7 @@ api.post("/shelves-read", noShelves, (req, res, next) => aiBudget(req, res, next
     res.status(502).json({ error: describeError(err) });
   }
 });
-// A shelf by its link: what the page shows before «Додати собі».
+// A shelf by its link: what the page shows before «Стежити».
 api.get("/shelf/:key", noShelves, (req, res) => {
   const hit = shelves.open(req.params.key);
   if (!hit) return res.status(404).json({ error: "Такої полиці немає. Можливо, посилання вже змінили." });
@@ -2200,7 +2202,7 @@ api.post("/shelf/:key/follow", noShelves, (req, res) => {
     return shelfFail(res, err);
   }
   if (!hit) return res.status(404).json({ error: "Такої полиці немає. Можливо, посилання вже змінили." });
-  if (!hit.own && !hit.already && req.acct !== OWNER_ID) alertOwner(`Полиця друга: ${hit.shelf.name}`, `${shelfWho(req.acct)} додав(ла) собі полицю «${hit.shelf.name}» читача ${shelfWho(hit.o)} (${hit.shelf.books.length} кн.).`);
+  if (!hit.own && !hit.already && req.acct !== OWNER_ID) alertOwner(`Полиця друга: ${hit.shelf.name}`, `${shelfWho(req.acct)} стежить за полицею «${hit.shelf.name}» читача ${shelfWho(hit.o)} (${hit.shelf.books.length} кн.).`);
   res.json({ ok: true, o: hit.o, id: hit.id });
 });
 // A friend's shelf the reader added: its books; «Прибрати» takes it off.
@@ -3148,7 +3150,7 @@ api.post("/cover/pick", guestsCannot("Без входу не можна змін
 });
 
 // The address of the reader's OPDS catalog: GET /api/opds { url }, POST /api/opds makes a new one (the old stops).
-const opdsUrl = (req, token) => (token ? `${READER_DOMAIN ? `https://${READER_DOMAIN}` : `${req.protocol}://${req.get("host")}`}/opds/${token}` : null);
+const opdsUrl = (req, token) => (token ? `${publicOrigin(req)}/opds/${token}` : null);
 const myOpds = (req) => Object.keys(state.opds).find((t) => state.opds[t].acct === req.acct);
 api.get("/opds", guestsCannot("Без входу каталогу немає."), (req, res) => res.json({ url: opdsUrl(req, myOpds(req)) }));
 api.post("/opds", guestsCannot("Без входу каталогу немає."), (req, res) => {
@@ -3161,7 +3163,7 @@ api.post("/opds", guestsCannot("Без входу каталогу немає.")
 });
 
 // Links to one book: GET /api/shares?path=<book>, POST /api/shares { path, for }, DELETE /api/shares/<token>.
-const shareView = (req, token, sh) => ({ token, url: `${req.protocol}://${req.get("host")}/s/${token}`, for: sh.for, created: sh.created, expires: sh.expires, opened: sh.opened || 0, active: shareActive(sh) });
+const shareView = (req, token, sh) => ({ token, url: `${publicOrigin(req)}/s/${token}`, for: sh.for, created: sh.created, expires: sh.expires, opened: sh.opened || 0, active: shareActive(sh) });
 const mySharesOf = (req) => Object.entries(state.shares).filter(([, sh]) => sh.acct === req.acct);
 api.get("/shares", guestsCannot("Гість не може ділитися книжками."), (req, res) => {
   const name = safeBookName(req.query.path);

@@ -998,6 +998,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `GET /api/want/shelf` (siteShelf, not-wanted statuses by book page), «Уже прочитано» / «Читаєте» / «Кинули читати».
   Only `#r-wfound` redraws while typing; a whole redraw (`redraw()`) puts the focus back. Taps `want-find`,
   `act-want-find-add`.
+  Each part shows one row of covers (Max 2026-11-28, «довго гортати»): `fold(key, tiles)` + `fit()` (columns from the
+  grid, `inert` on the rest, «Ще N →» / «Згорнути», tap `act-want-more`); a part opened stays open for the visit (`opened`).
   «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): above «Купити або взяти напрокат», empty
   until the reader picks up to 5 shops (3 until bot №85) (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
   publisher, each with «N з вашого списку»; settings `shops`, names). `/api/reader-want` gives every book and every
@@ -1011,8 +1013,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   reader a day, 300 for all, Telegram once) or a pasted list (`{text}`: Haiku, 20 a reader a day), each title found by
   `catalogFind` (`match`: the read title's words whole in the found one, and its head or the author the same), then a
   review with ticks. Kept in `accounts/<id>/shelves.json`, keys in `DATA_DIR/shelf-keys.json`. «Поділитися» = a link
-  `/p/<key>` (→ `/?shelf=<key>`, a guest signs in first), seen only by it; «Нове посилання» drops the old key,
-  «Прибрати» takes one friend off. A friend's «Додати собі» puts it in their «Полиці»; `/api/want` gives each book
+  `/p/<key>` (on app.chytai.org.ua, `publicOrigin`: the app runs on chytai.fly.dev, so a link a reader passes on never takes the request's host) (→ `/?shelf=<key>`, a guest signs in first), seen only by it; «Нове посилання» drops the old key,
+  «Прибрати» takes one friend off. A friend's «Стежити» puts it in their «Полиці»; `/api/want` gives each book
   `shelves` (by catalog page, else title head + surname, `shelves.index`), want.js shows «Полиці друзів» after «Можна
   читати зараз» (only when the reader has a friend's shelf) and «У друзів» first in the card's «Де взяти». No messages,
   no contacts: they write each other themselves. Max hears of a shelf's first books and of every shelf added
